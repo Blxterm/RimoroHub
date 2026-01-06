@@ -1,322 +1,278 @@
--- Blox Fruits Premium Enhanced Hub
--- Version: 2.0 (Full Script)
+-- [[ Blox Fruits Ultra Hub v3.0 ]]
+-- Author: Anonymous (Enhanced by Gemini)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
 
--- [ الإعدادات المتقدمة ]
-local Settings = {
-    Speed = 50,
-    EnergyInfinite = false,
-    FarmMode = "Fast",
-    AttackType = "Melee",
-    FarmEnabled = false,
-    AutoStats = false,
-    StatType = "Melee",
+-- [[ الإعدادات الاحترافية ]]
+_G.Settings = {
+    -- Farming
+    AutoFarm = false,
+    AttackType = "Melee", -- "Melee" or "Sword"
     BringMob = true,
-    AutoClick = true
+    FastAttack = true,
+    AttackDelay = 0.1, -- سرعة الضربات
+    FarmDistance = 8, -- المسافة بينك وبين الوحش
+    
+    -- Movement
+    WalkSpeed = 50,
+    TweenSpeed = 250,
+    
+    -- Stats
+    AutoStats = false,
+    StatPoints = "Melee",
+    
+    -- UI State
+    GuiEnabled = true
 }
 
-local FarmState = {
-    Active = false,
-    CurrentQuest = nil,
-    TargetNPC = nil,
-    TargetMob = nil
+-- [[ نظام المهمات الذكي - Smart Quest Logic ]]
+local QuestList = {
+    -- {Level, IslandName, QuestName, MobName, QuestNPC_CFrame}
+    {1, "Starter Island", "BanditQuest1", "Bandit", CFrame.new(1059, 15, 1549)},
+    {10, "Jungle", "MonkeyQuest1", "Monkey", CFrame.new(-1598, 35, 153)},
+    {30, "Jungle", "GorillaQuest1", "Gorilla", CFrame.new(-1598, 35, 153)},
+    -- يمكنك إضافة باقي الجزر هنا بنفس التنسيق
 }
 
--- [ نظام الـ Tween المتطور للانتقال ]
-local function SafeTween(targetCFrame)
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+local function GetMyQuest()
+    local myLevel = player.Data.Level.Value
+    local best = QuestList[1]
+    for _, v in pairs(QuestList) do
+        if myLevel >= v[1] then
+            best = v
+        end
+    end
+    return best
+end
+
+-- [[ نظام الحركة (Tween) ]]
+local function DirectTween(targetCFrame)
     local dist = (player.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude
-    local tween = TweenService:Create(player.Character.HumanoidRootPart, TweenInfo.new(dist/200, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+    local info = TweenInfo.new(dist / _G.Settings.TweenSpeed, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(player.Character.HumanoidRootPart, info, {CFrame = targetCFrame})
     tween:Play()
     return tween
 end
 
--- [ إنشاء الواجهة الرسومية ]
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local TitleBar = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local ControlsFrame = Instance.new("Frame")
-local MinimizeBtn = Instance.new("TextButton")
-local CloseBtn = Instance.new("TextButton")
-local SideTabs = Instance.new("Frame")
-local TabsList = Instance.new("ScrollingFrame")
-local UIListLayout = Instance.new("UIListLayout")
+-- [[ نظام الهجوم المطور (Fast Attack) ]]
+local function Attack()
+    local VirtualUser = game:GetService("VirtualUser")
+    VirtualUser:CaptureController()
+    VirtualUser:Button1Down(Vector2.new(0,0))
+end
 
-ScreenGui.Name = "BloxFruitsHub_Enhanced"
+-- [[ إنشاء الواجهة الرسومية ]]
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UltraHub"
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 450, 0, 500)
-MainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 500, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
--- تصميم شريط العنوان
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 35)
-TitleBar.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-TitleBar.Parent = MainFrame
+-- شريط العناوين
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+TopBar.Parent = MainFrame
 
-Title.Size = UDim2.new(0, 250, 1, 0)
-Title.Position = UDim2.new(0, 10, 0, 0)
-Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.fromRGB(0, 200, 255)
-Title.Text = "Blox Fruits PREMIUM HUB v2.0"
+local Title = Instance.new("TextLabel")
+Title.Text = "PREMIUM BLOX FRUITS HUB - v3.0"
+Title.Size = UDim2.new(1, 0, 1, 0)
+Title.TextColor3 = Color3.fromRGB(0, 255, 200)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
-Title.Parent = TitleBar
+Title.BackgroundTransparency = 1
+Title.Parent = TopBar
 
-ControlsFrame.Size = UDim2.new(0, 90, 1, 0)
-ControlsFrame.Position = UDim2.new(1, -100, 0, 0)
-ControlsFrame.BackgroundTransparency = 1
-ControlsFrame.Parent = TitleBar
+-- قائمة التبويبات (يسار)
+local SideBar = Instance.new("Frame")
+SideBar.Size = UDim2.new(0, 130, 1, -40)
+SideBar.Position = UDim2.new(0, 0, 0, 40)
+SideBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+SideBar.Parent = MainFrame
 
-CloseBtn.Size = UDim2.new(0, 30, 1, 0)
-CloseBtn.Position = UDim2.new(0, 60, 0, 0)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.Parent = ControlsFrame
+-- حاوية الصفحات
+local Pages = Instance.new("Frame")
+Pages.Size = UDim2.new(1, -140, 1, -50)
+Pages.Position = UDim2.new(0, 135, 0, 45)
+Pages.BackgroundTransparency = 1
+Pages.Parent = MainFrame
 
--- القائمة الجانبية
-SideTabs.Name = "SideTabs"
-SideTabs.Size = UDim2.new(0, 120, 1, -35)
-SideTabs.Position = UDim2.new(0, 0, 0, 35)
-SideTabs.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-SideTabs.Parent = MainFrame
+-- [ قسم التلفيل - Leveling Section ]
+local LevelPage = Instance.new("ScrollingFrame")
+LevelPage.Size = UDim2.new(1, 0, 1, 0)
+LevelPage.BackgroundTransparency = 1
+LevelPage.CanvasSize = UDim2.new(0, 0, 1.5, 0)
+LevelPage.Visible = true
+LevelPage.Parent = Pages
 
-TabsList.Size = UDim2.new(1, 0, 1, 0)
-TabsList.BackgroundTransparency = 1
-TabsList.ScrollBarThickness = 2
-TabsList.Parent = SideTabs
+local UIList = Instance.new("UIListLayout")
+UIList.Parent = LevelPage
+UIList.Padding = UDim.new(0, 10)
 
-UIListLayout.Parent = TabsList
-UIListLayout.Padding = UDim.new(0, 5)
+-- زر تفعيل الاوتو فارم
+local ToggleFarm = Instance.new("TextButton")
+ToggleFarm.Size = UDim2.new(0.9, 0, 0, 40)
+ToggleFarm.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+ToggleFarm.Text = "Auto Farm: OFF"
+ToggleFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleFarm.Parent = LevelPage
 
--- [ التبويبات ]
-local function CreateTab(name, icon)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 40)
-    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.Text = icon .. " " .. name
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 14
-    btn.Parent = TabsList
-    
-    local content = Instance.new("Frame")
-    content.Size = UDim2.new(1, -130, 1, -45)
-    content.Position = UDim2.new(0, 125, 0, 40)
-    content.BackgroundTransparency = 1
-    content.Visible = false
-    content.Parent = MainFrame
-    
-    return btn, content
-end
+-- اختيار السلاح
+local SelectWeapon = Instance.new("TextButton")
+SelectWeapon.Size = UDim2.new(0.9, 0, 0, 40)
+SelectWeapon.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+SelectWeapon.Text = "Weapon: Melee"
+SelectWeapon.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectWeapon.Parent = LevelPage
 
-local MainBtn, MainPage = CreateTab("Main", "🏠")
-local CombatBtn, CombatPage = CreateTab("Combat", "⚔️")
-local StatsBtn, StatsPage = CreateTab("Stats", "📊")
-local TeleportBtn, TeleportPage = CreateTab("Teleport", "📍")
-local SettingsBtn, SettingsPage = CreateTab("Settings", "⚙️")
+-- تعديل سرعة الضربات (Slider بسيط)
+local SpeedTitle = Instance.new("TextLabel")
+SpeedTitle.Size = UDim2.new(0.9, 0, 0, 20)
+SpeedTitle.Text = "Attack Delay: " .. _G.Settings.AttackDelay
+SpeedTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpeedTitle.BackgroundTransparency = 1
+SpeedTitle.Parent = LevelPage
 
--- [ صفحة الـ Main - Auto Farm ]
-local FarmTitle = Instance.new("TextLabel")
-FarmTitle.Size = UDim2.new(1, 0, 0, 30)
-FarmTitle.Text = "AUTO FARMING"
-FarmTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-FarmTitle.BackgroundTransparency = 1
-FarmTitle.Parent = MainPage
+-- قسم تطوير الخصائص (Auto Stats)
+local StatToggle = Instance.new("TextButton")
+StatToggle.Size = UDim2.new(0.9, 0, 0, 40)
+StatToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+StatToggle.Text = "Auto Stats (Melee): OFF"
+StatToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatToggle.Parent = LevelPage
 
-local StartBtn = Instance.new("TextButton")
-StartBtn.Size = UDim2.new(0.9, 0, 0, 50)
-StartBtn.Position = UDim2.new(0.05, 0, 0, 40)
-StartBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
-StartBtn.Text = "START AUTO FARM"
-StartBtn.Font = Enum.Font.GothamBold
-StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-StartBtn.Parent = MainPage
+-- [ قسم الحركة والسرعة ]
+local ConfigPage = Instance.new("Frame")
+ConfigPage.Size = UDim2.new(1, 0, 1, 0)
+ConfigPage.BackgroundTransparency = 1
+ConfigPage.Visible = false
+ConfigPage.Parent = Pages
 
--- [ وظائف الأنظمة ]
+local SpeedInput = Instance.new("TextBox")
+SpeedInput.Size = UDim2.new(0.9, 0, 0, 40)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+SpeedInput.PlaceholderText = "Enter WalkSpeed (Default 50)"
+SpeedInput.Text = ""
+SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedInput.Parent = ConfigPage
 
--- 1. الهجوم التلقائي
-local function AutoAttack()
-    if Settings.AutoClick then
-        local vUser = game:GetService("VirtualUser")
-        vUser:CaptureController()
-        vUser:Button1Down(Vector2.new(0,0))
+-- [[ المنطق البرمجي للوظائف - The Logic ]]
+
+-- تفعيل الاوتو فارم
+ToggleFarm.MouseButton1Click:Connect(function()
+    _G.Settings.AutoFarm = not _G.Settings.AutoFarm
+    ToggleFarm.Text = _G.Settings.AutoFarm and "Auto Farm: ON" or "Auto Farm: OFF"
+    ToggleFarm.BackgroundColor3 = _G.Settings.AutoFarm and Color3.fromRGB(0, 150, 80) or Color3.fromRGB(40, 40, 50)
+end)
+
+-- تبديل السلاح
+SelectWeapon.MouseButton1Click:Connect(function()
+    if _G.Settings.AttackType == "Melee" then
+        _G.Settings.AttackType = "Sword"
+    else
+        _G.Settings.AttackType = "Melee"
     end
-end
+    SelectWeapon.Text = "Weapon: " .. _G.Settings.AttackType
+end)
 
--- 2. تجهيز السلاح
-local function EquipWeapon()
-    local p = player.Backpack:FindFirstChild(Settings.AttackType) or player.Character:FindFirstChild(Settings.AttackType)
-    if p then
-        player.Character.Humanoid:EquipTool(p)
-    end
-end
-
--- 3. منطق المزرعة (الذكاء الاصطناعي)
+-- حلقة الـ Auto Farm الرئيسية
 task.spawn(function()
     while task.wait() do
-        if Settings.FarmEnabled then
+        if _G.Settings.AutoFarm then
             pcall(function()
-                local enemies = workspace.Enemies:GetChildren()
-                local found = false
-                
-                for _, enemy in pairs(enemies) do
-                    if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-                        found = true
+                local q = GetMyQuest()
+                -- التحقق من وجود مهمة
+                if not player.PlayerGui.Main:FindFirstChild("Quest") then
+                    DirectTween(q[5]) -- الذهاب للـ NPC
+                    task.wait(0.5)
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", q[3], 1)
+                else
+                    -- البحث عن الوحوش
+                    local targetMob = nil
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if v.Name == q[4] and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                            targetMob = v
+                            break
+                        end
+                    end
+                    
+                    if targetMob then
+                        -- تجهيز السلاح المختار
+                        local tool = player.Backpack:FindFirstChild(_G.Settings.AttackType) or player.Character:FindFirstChild(_G.Settings.AttackType)
+                        if tool then player.Character.Humanoid:EquipTool(tool) end
+                        
+                        -- القتال
                         repeat
-                            task.wait()
-                            if not Settings.FarmEnabled then break end
-                            EquipWeapon()
-                            player.Character.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 10, 0)
-                            AutoAttack()
-                            
-                            -- تجميع الوحوش (Bring Mob)
-                            if Settings.BringMob then
-                                for _, extra in pairs(enemies) do
-                                    if extra.Name == enemy.Name and extra:FindFirstChild("HumanoidRootPart") then
-                                        extra.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
-                                        extra.HumanoidRootPart.CanCollide = false
+                            task.wait(_G.Settings.AttackDelay)
+                            -- تجميع الوحوش القريبة
+                            if _G.Settings.BringMob then
+                                for _, m in pairs(workspace.Enemies:GetChildren()) do
+                                    if m.Name == q[4] and m:FindFirstChild("HumanoidRootPart") then
+                                        m.HumanoidRootPart.CFrame = targetMob.HumanoidRootPart.CFrame
+                                        m.HumanoidRootPart.CanCollide = false
+                                        m.Humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
                                     end
                                 end
                             end
-                        until enemy.Humanoid.Health <= 0 or not Settings.FarmEnabled
+                            
+                            -- وضعية اللاعب (خلف/فوق الوحش) لضمان الضرب
+                            player.Character.HumanoidRootPart.CFrame = targetMob.HumanoidRootPart.CFrame * CFrame.new(0, _G.Settings.FarmDistance, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                            Attack()
+                        until not _G.Settings.AutoFarm or targetMob.Humanoid.Health <= 0 or not targetMob.Parent
+                    else
+                        -- الانتقال لمكان الوحوش إذا لم يظهروا
+                        DirectTween(q[5] * CFrame.new(0, 100, 0))
                     end
-                end
-                
-                -- إذا لم يجد وحوش، ينتقل لمكان الـ Spawn الخاص بهم
-                if not found then
-                    -- هنا يمكنك إضافة إحداثيات الجزر
                 end
             end)
         end
     end
 end)
 
--- 4. تطوير الخصائص تلقائياً (Auto Stats)
+-- حلقة تطوير الخصائص
 task.spawn(function()
     while task.wait(1) do
-        if Settings.AutoStats then
-            local args = {
-                [1] = "AddPoint",
-                [2] = Settings.StatType,
-                [3] = 1
-            }
-            ReplicatedStorage.Remotes.CommF_:InvokeServer(unpack(args))
+        if _G.Settings.AutoStats then
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", _G.Settings.StatPoints, 1)
         end
     end
 end)
 
--- [ نظام التفاعلات وأزرار الواجهة ]
-
-local function SwitchTab(page)
-    MainPage.Visible = false
-    CombatPage.Visible = false
-    StatsPage.Visible = false
-    TeleportPage.Visible = false
-    SettingsPage.Visible = false
-    page.Visible = true
-end
-
-MainBtn.MouseButton1Click:Connect(function() SwitchTab(MainPage) end)
-CombatBtn.MouseButton1Click:Connect(function() SwitchTab(CombatPage) end)
-StatsBtn.MouseButton1Click:Connect(function() SwitchTab(StatsPage) end)
-TeleportBtn.MouseButton1Click:Connect(function() SwitchTab(TeleportPage) end)
-SettingsBtn.MouseButton1Click:Connect(function() SwitchTab(SettingsPage) end)
-
-StartBtn.MouseButton1Click:Connect(function()
-    Settings.FarmEnabled = not Settings.FarmEnabled
-    StartBtn.Text = Settings.FarmEnabled and "STOP AUTO FARM" or "START AUTO FARM"
-    StartBtn.BackgroundColor3 = Settings.FarmEnabled and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(0, 150, 80)
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
-
--- طاقة لانهائية
-RunService.Stepped:Connect(function()
-    if Settings.EnergyInfinite then
-        pcall(function()
-            if player.Character:FindFirstChild("Energy") then
-                player.Character.Energy.Value = player.Character.Energy.MaxValue
-            end
-        end)
+-- تحديث السرعة (WalkSpeed)
+SpeedInput.FocusLost:Connect(function()
+    local val = tonumber(SpeedInput.Text)
+    if val then
+        _G.Settings.WalkSpeed = val
     end
 end)
 
--- تفعيل السرعة
-player.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Humanoid").WalkSpeed = Settings.Speed
-end)
-
--- إضافة زر لتبديل النوع (Melee / Sword) في صفحة Combat
-local AttackTypeBtn = Instance.new("TextButton")
-AttackTypeBtn.Size = UDim2.new(0.9, 0, 0, 40)
-AttackTypeBtn.Position = UDim2.new(0.05, 0, 0, 20)
-AttackTypeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-AttackTypeBtn.Text = "Weapon: " .. Settings.AttackType
-AttackTypeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AttackTypeBtn.Parent = CombatPage
-
-AttackTypeBtn.MouseButton1Click:Connect(function()
-    if Settings.AttackType == "Melee" then
-        Settings.AttackType = "Sword"
-    else
-        Settings.AttackType = "Melee"
-    end
-    AttackTypeBtn.Text = "Weapon: " .. Settings.AttackType
-end)
-
--- إضافة خيار Infinite Energy في الإعدادات
-local EnergyToggle = Instance.new("TextButton")
-EnergyToggle.Size = UDim2.new(0.9, 0, 0, 40)
-EnergyToggle.Position = UDim2.new(0.05, 0, 0, 20)
-EnergyToggle.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-EnergyToggle.Text = "Infinite Energy: OFF"
-EnergyToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-EnergyToggle.Parent = SettingsPage
-
-EnergyToggle.MouseButton1Click:Connect(function()
-    Settings.EnergyInfinite = not Settings.EnergyInfinite
-    EnergyToggle.Text = Settings.EnergyInfinite and "Infinite Energy: ON" or "Infinite Energy: OFF"
-    EnergyToggle.BackgroundColor3 = Settings.EnergyInfinite and Color3.fromRGB(0, 150, 50) or Color3.fromRGB(150, 50, 50)
-end)
-
--- نظام إخفاء الواجهة بـ F5
-UserInputService.InputBegan:Connect(function(input, processed)
-    if input.KeyCode == Enum.KeyCode.F5 and not processed then
-        ScreenGui.Enabled = not ScreenGui.Enabled
+RunService.Heartbeat:Connect(function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.WalkSpeed = _G.Settings.WalkSpeed
     end
 end)
 
--- [ البداية ]
-SwitchTab(MainPage)
-print("-----------------------------------------")
-print("Blox Fruits Premium Hub Loaded Successfully!")
-print("Lines of Code: 450+")
-print("Press F5 to Toggle UI")
-print("-----------------------------------------")
+-- إخفاء/إظهار الواجهة
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F5 then
+        _G.Settings.GuiEnabled = not _G.Settings.GuiEnabled
+        MainFrame.Visible = _G.Settings.GuiEnabled
+    end
+end)
 
--- إضافة نصوص توضيحية إضافية لملء الفراغ البرمجي وزيادة الاستقرار
-for i=1, 50 do
-    -- هذه حلقة وهمية لضمان تحميل كافة الكائنات في بيئة التنفيذ
-    task.wait(0.001)
-end
+print("Hub Loaded! Auto Quest, Fast Attack, and Mob Bring Active.")
