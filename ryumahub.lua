@@ -1,29 +1,25 @@
 --==================================================
--- Blox Fruits Auto Combo Ultimate
+-- Blox Fruits Auto Combo Complete
 --==================================================
 
---// Services
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local VirtualInput = game:GetService("VirtualInputManager")
 
---// Player
+-- Player
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
---==================================================
---// Combo Data
---==================================================
+-- Combo Data
 local combo = {}
 local executing = false
 local target = nil
 local aimlockEnabled = false
 
---==================================================
---// Circle Part
---==================================================
+-- Circle Part
 local circlePart = Instance.new("Part")
 circlePart.Anchored = true
 circlePart.CanCollide = false
@@ -34,25 +30,21 @@ circlePart.Transparency = 0.3
 circlePart.Name = "ComboZone"
 local mesh = Instance.new("CylinderMesh",circlePart)
 circlePart.Orientation = Vector3.new(0,0,90)
-
 local circleEnabled = true
 local circleRadius = 15
 
+-- Update Circle Position
 RunService.RenderStepped:Connect(function()
     if circleEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        circlePart.Position = player.Character.HumanoidRootPart.Position - Vector3.new(0,3,0)
+        circlePart.Position = player.Character.HumanoidRootPart.Position
         circlePart.Parent = Workspace
     end
-    if aimlockEnabled and target then
-        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            camera.CFrame = CFrame.new(camera.CFrame.Position,target.Character.HumanoidRootPart.Position)
-        end
+    if aimlockEnabled and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        camera.CFrame = CFrame.new(camera.CFrame.Position,target.Character.HumanoidRootPart.Position)
     end
 end)
 
---==================================================
---// Helper Functions
---==================================================
+-- Helper Functions
 local function validTarget(plr)
     if not plr or plr == player then return false end
     if not plr.Character then return false end
@@ -80,9 +72,7 @@ local function getTargetInCircle()
     return closest
 end
 
---==================================================
---// GUI
---==================================================
+-- GUI
 local gui = Instance.new("ScreenGui",game.CoreGui)
 gui.Name = "AutoComboGUI"
 
@@ -101,9 +91,7 @@ title.TextColor3 = Color3.fromRGB(255,255,255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 20
 
---==================================================
---// Select Order
---==================================================
+-- Select Order 4 Steps
 local selectOrder = {}
 local orderDropdowns = {}
 local options = {"Sword","Fruit","Style","Gun"}
@@ -129,7 +117,7 @@ for i=1,4 do
     dropdown.BackgroundColor3 = Color3.fromRGB(60,60,80)
 
     local menu = Instance.new("Frame",frame)
-    menu.Size = UDim2.new(0.5,0,0,120)
+    menu.Size = UDim2.new(0.5,0,0,#options*30)
     menu.Position = UDim2.new(0.45,0,0.05+0.12*i+0.03,0)
     menu.BackgroundColor3 = Color3.fromRGB(50,50,70)
     menu.Visible = false
@@ -164,9 +152,7 @@ for i=1,4 do
     orderDropdowns[i] = dropdown
 end
 
---==================================================
---// Moves Dropdowns
---==================================================
+-- Moves Dropdowns
 local moveOptions = {
     Sword={"Z","X","C","V"},
     Fruit={"Z","X","C","V"},
@@ -227,12 +213,10 @@ for i, tool in pairs(options) do
     yPos = yPos + 0.06
 end
 
---==================================================
---// Save & Execute Combo
---==================================================
+-- Save & Execute
 local saveBtn = Instance.new("TextButton",frame)
 saveBtn.Size = UDim2.new(0.9,0,0,40)
-saveBtn.Position = UDim2.new(0.05,0,0.9,0)
+saveBtn.Position = UDim2.new(0.05,0,0.92,0)
 saveBtn.Text = "Save Combo"
 saveBtn.Font = Enum.Font.GothamBold
 saveBtn.TextSize = 16
@@ -251,7 +235,7 @@ saveBtn.MouseButton1Click:Connect(function()
     end
     frame.Visible = false
 
-    -- زر تنفيذ الكومبو فوق الشاشة
+    -- زر تنفيذ الكومبو
     local execBtn = Instance.new("TextButton",gui)
     execBtn.Size = UDim2.new(0.3,0,0,40)
     execBtn.Position = UDim2.new(0.35,0,0.92,0)
@@ -268,11 +252,10 @@ saveBtn.MouseButton1Click:Connect(function()
             return
         end
 
-        -- Fly سريع نحو الهدف
+        -- Fly سريع + Aimlock
         local hrp = player.Character.HumanoidRootPart
         local tgtHRP = target.Character.HumanoidRootPart
         aimlockEnabled = true
-
         local flySpeed = 150
         local reached = false
         while target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and not reached do
@@ -282,17 +265,17 @@ saveBtn.MouseButton1Click:Connect(function()
             else
                 hrp.CFrame = hrp.CFrame + dir.Unit * flySpeed * RunService.RenderStepped:Wait()
             end
-            -- Aimlock
             camera.CFrame = CFrame.new(camera.CFrame.Position, tgtHRP.Position)
         end
 
         -- تنفيذ الكومبو
+        local keyMap = {Z=Enum.KeyCode.Z,X=Enum.KeyCode.X,C=Enum.KeyCode.C,V=Enum.KeyCode.V}
         for _, act in pairs(combo) do
-            if executing then break end
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                VirtualInput:SendKeyEvent(true, Enum.KeyCode[act.move], false, game)
+            local key = keyMap[act.move]
+            if key then
+                VirtualInput:SendKeyEvent(true,key,false,game)
                 wait(0.1)
-                VirtualInput:SendKeyEvent(false, Enum.KeyCode[act.move], false, game)
+                VirtualInput:SendKeyEvent(false,key,false,game)
                 wait(0.2)
             end
         end
