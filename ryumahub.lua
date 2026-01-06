@@ -1,6 +1,8 @@
 --[[ 
-    STamPHub Script - Blox Fruits Edition
-    Created for Professional Use
+    STamPHub V2 - Fixed & Optimized
+    - Fixed Draggable Tool
+    - Fixed Speed/Jump Reset
+    - Fixed Fast Attack Logic
 ]]
 
 local Players = game:GetService("Players")
@@ -8,9 +10,10 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
--- // متغيرات التحكم (States)
-local Config = {
+-- // Configuration Table
+local STampConfig = {
     Enabled = false,
     Aimbot = false,
     FastAttack = false,
@@ -19,107 +22,53 @@ local Config = {
     AutoV4 = false,
     WalkSpeed = 16,
     JumpPower = 50,
-    Target = nil
+    Target = nil,
+    MenuVisible = false
 }
 
--- // إنشاء الواجهة (GUI Creation)
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-ScreenGui.Name = "STamPHub_UI"
+-- // UI Creation (Built for Stability)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "STamPHub_Fixed"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
 
--- الزر الرئيسي (Main Toggle)
+-- الزر الرئيسي (Parent لجميع العناصر لضمان الحركة الموحدة)
 local MainBtn = Instance.new("TextButton")
 MainBtn.Name = "MainBtn"
 MainBtn.Parent = ScreenGui
-MainBtn.Size = UDim2.new(0, 150, 0, 50)
-MainBtn.Position = UDim2.new(0.5, -75, 0.2, 0)
-MainBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+MainBtn.Size = UDim2.new(0, 160, 0, 55)
+MainBtn.Position = UDim2.new(0.5, -80, 0.4, 0)
+MainBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainBtn.Text = "STamPHub Off"
 MainBtn.TextColor3 = Color3.new(1, 1, 1)
-MainBtn.Font = Enum.Font.GothamBold
-MainBtn.TextSize = 18
-MainBtn.BorderSizePixel = 2
+MainBtn.Font = Enum.Font.SourceSansBold
+MainBtn.TextSize = 20
+MainBtn.ZIndex = 5
+Instance.new("UICorner", MainBtn).CornerRadius = UDim.new(0, 10)
 
--- إضافة انحناء للزوايا
-local Corner = Instance.new("UICorner", MainBtn)
-Corner.CornerRadius = UDim.new(0, 8)
+-- الترس (ملتصق بالزر تماماً)
+local SettingsIcon = Instance.new("ImageButton")
+SettingsIcon.Name = "SettingsIcon"
+SettingsIcon.Parent = MainBtn
+SettingsIcon.Size = UDim2.new(0, 30, 0, 30)
+SettingsIcon.Position = UDim2.new(1, -35, 0.5, -15) -- داخل الزر جهة اليمين
+SettingsIcon.BackgroundTransparency = 1
+SettingsIcon.Image = "rbxassetid://6031289132"
+SettingsIcon.ZIndex = 6
 
--- زر الترس (Settings Cog)
-local SettingsBtn = Instance.new("ImageButton")
-SettingsBtn.Name = "SettingsBtn"
-SettingsBtn.Parent = MainBtn
-SettingsBtn.Size = UDim2.new(0, 30, 0, 30)
-SettingsBtn.Position = UDim2.new(1, 10, 0.2, 0)
-SettingsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-SettingsBtn.Image = "rbxassetid://6031289132" -- أيقونة ترس
-Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 5)
-
--- لوحة الإعدادات (The Menu)
+-- لوحة القائمة (تظهر تحت الزر وتتحرك معه)
 local MenuFrame = Instance.new("Frame")
 MenuFrame.Name = "MenuFrame"
-MenuFrame.Parent = ScreenGui
-MenuFrame.Size = UDim2.new(0, 220, 0, 350)
-MenuFrame.Position = UDim2.new(0.5, 85, 0.2, 0)
-MenuFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MenuFrame.Visible = false -- تبدأ مخفية
-Instance.new("UICorner", MenuFrame).CornerRadius = UDim.new(0, 10)
+MenuFrame.Parent = MainBtn
+MenuFrame.Size = UDim2.new(0, 200, 0, 320)
+MenuFrame.Position = UDim2.new(0, -20, 1, 10)
+MenuFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MenuFrame.Visible = false
+MenuFrame.BorderSizePixel = 0
+Instance.new("UICorner", MenuFrame).CornerRadius = UDim.new(0, 8)
 
--- تخطيط القائمة (Layout)
-local Layout = Instance.new("UIListLayout", MenuFrame)
-Layout.Padding = UDim.new(0, 10)
-Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
--- // وظائف إنشاء العناصر داخل القائمة
-local function CreateToggle(name, callback)
-    local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(0, 180, 0, 35)
-    Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    Btn.Text = name .. " [OFF]"
-    Btn.TextColor3 = Color3.new(1, 1, 1)
-    Btn.Parent = MenuFrame
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 5)
-    
-    local active = false
-    Btn.MouseButton1Click:Connect(function()
-        active = not active
-        Btn.Text = name .. (active and " [ON]" or " [OFF]")
-        Btn.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
-        callback(active)
-    end)
-end
-
-local function CreateEdit(name, placeholder, callback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0, 180, 0, 35)
-    Frame.BackgroundTransparency = 1
-    Frame.Parent = MenuFrame
-    
-    local Label = Instance.new("TextLabel", Frame)
-    Label.Size = UDim2.new(0, 100, 1, 0)
-    Label.Text = name
-    Label.TextColor3 = Color3.new(1, 1, 1)
-    Label.BackgroundTransparency = 1
-    
-    local Box = Instance.new("TextBox", Frame)
-    Box.Size = UDim2.new(0, 70, 1, 0)
-    Box.Position = UDim2.new(0, 110, 0, 0)
-    Box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    Box.PlaceholderText = placeholder
-    Box.Text = ""
-    Box.TextColor3 = Color3.new(1, 1, 1)
-    
-    Box.FocusLost:Connect(function()
-        callback(tonumber(Box.Text))
-    end)
-end
-
--- // تفعيل السحب (Draggable Script)
+-- // تحريك الزر (Dragging Logic)
 local dragging, dragInput, dragStart, startPos
-local function update(input)
-    local delta = input.Position - dragStart
-    MainBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    MenuFrame.Position = UDim2.new(MainBtn.Position.X.Scale, MainBtn.Position.X.Offset + 160, MainBtn.Position.Y.Scale, MainBtn.Position.Y.Offset)
-end
-
 MainBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
@@ -130,7 +79,8 @@ end)
 
 UserInputService.InputChanged:Connect(function(input)
     if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        update(input)
+        local delta = input.Position - dragStart
+        MainBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
@@ -140,89 +90,90 @@ MainBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- // برمجة الوظائف (The Logic)
-
--- 1. الزر الرئيسي والايمبوت
-MainBtn.MouseButton1Click:Connect(function()
-    Config.Enabled = not Config.Enabled
-    MainBtn.Text = Config.Enabled and "STamPHub On" or "STamPHub Off"
-    MainBtn.BackgroundColor3 = Config.Enabled and Color3.fromRGB(40, 0, 0) or Color3.fromRGB(0, 0, 0)
+-- // Helper Functions for UI
+local function AddToggle(text, callback)
+    local Tgl = Instance.new("TextButton")
+    Tgl.Size = UDim2.new(0, 180, 0, 35)
+    Tgl.Parent = MenuFrame
+    Tgl.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    Tgl.Text = text .. ": OFF"
+    Tgl.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", Tgl).CornerRadius = UDim.new(0, 5)
     
-    if Config.Enabled then
-        -- البحث عن أقرب هدف عند الضغط
-        local closest = nil
-        local dist = math.huge
-        for _, v in pairs(Players:GetPlayers()) do
-            if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-                local d = (v.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                if d < dist then
-                    dist = d
-                    closest = v
-                end
+    local state = false
+    Tgl.MouseButton1Click:Connect(function()
+        state = not state
+        Tgl.Text = text .. (state and ": ON" or ": OFF")
+        Tgl.BackgroundColor3 = state and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(35, 35, 35)
+        callback(state)
+    end)
+end
+
+local function AddInput(label, placeholder, callback)
+    local Container = Instance.new("Frame", MenuFrame)
+    Container.Size = UDim2.new(0, 180, 0, 35)
+    Container.BackgroundTransparency = 1
+    
+    local txtLabel = Instance.new("TextLabel", Container)
+    txtLabel.Size = UDim2.new(0, 100, 1, 0)
+    txtLabel.Text = label
+    txtLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+    txtLabel.BackgroundTransparency = 1
+    
+    local box = Instance.new("TextBox", Container)
+    box.Size = UDim2.new(0, 70, 0, 25)
+    box.Position = UDim2.new(0, 105, 0.2, 0)
+    box.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    box.Text = ""
+    box.PlaceholderText = placeholder
+    box.TextColor3 = Color3.new(1, 1, 1)
+    
+    box.FocusLost:Connect(function()
+        callback(tonumber(box.Text))
+    end)
+end
+
+Instance.new("UIListLayout", MenuFrame).Padding = UDim.new(0, 5)
+
+-- // تفعيل الميزات (Logic)
+
+-- 1. السرعة والقفز (إصلاح مشكلة عدم الاشتغال)
+RunService.Stepped:Connect(function()
+    pcall(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            if STampConfig.WalkSpeed > 16 then
+                LocalPlayer.Character.Humanoid.WalkSpeed = STampConfig.WalkSpeed
+            end
+            if STampConfig.JumpPower > 50 then
+                LocalPlayer.Character.Humanoid.JumpPower = STampConfig.JumpPower
+                LocalPlayer.Character.Humanoid.UseJumpPower = true
             end
         end
-        Config.Target = closest
-    else
-        Config.Target = nil
-    end
+    end)
 end)
 
--- 2. فتح وإغلاق القائمة
-SettingsBtn.MouseButton1Click:Connect(function()
-    MenuFrame.Visible = not MenuFrame.Visible
-end)
-
--- 3. إضافة الأزرار داخل القائمة
-CreateToggle("Inf Energy", function(v) Config.InfEnergy = v end)
-CreateToggle("Auto V3", function(v) Config.AutoV3 = v end)
-CreateToggle("Auto V4", function(v) Config.AutoV4 = v end)
-CreateToggle("Fast Attack", function(v) Config.FastAttack = v end)
-
-CreateEdit("Jump Edit", "150", function(v) 
-    if v then LocalPlayer.Character.Humanoid.JumpPower = v end 
-end)
-CreateEdit("Speed Edit", "50", function(v) 
-    if v then LocalPlayer.Character.Humanoid.WalkSpeed = v end 
-end)
-
--- // الحلقات التكرارية (Main Loops)
-
--- حلقة الـ Fast Attack والإيمبوت
-RunService.RenderStepped:Connect(function()
-    -- تثبيت الايم (Aimbot)
-    if Config.Enabled and Config.Target and Config.Target.Character then
-        local targetPos = Config.Target.Character.HumanoidRootPart.Position
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
-    end
-    
-    -- الطاقة اللانهائية
-    if Config.InfEnergy then
-        local myStats = LocalPlayer:FindFirstChild("Data") or LocalPlayer:FindFirstChild("Stats")
-        if myStats and myStats:FindFirstChild("Energy") then
-            myStats.Energy.Value = myStats.Energy.MaxValue
-        end
-    end
-    
-    -- Auto V3 / V4
-    if Config.AutoV3 then
-        game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("ActivateAbility")
-    end
-end)
-
--- حلقة الضرب المحيطي (0.2 ثانية)
+-- 2. الضرب المحيطي (Fast Attack)
 task.spawn(function()
     while true do
         task.wait(0.2)
-        if Config.Enabled and Config.FastAttack then
+        if STampConfig.Enabled and STampConfig.FastAttack then
             pcall(function()
                 local char = LocalPlayer.Character
-                local weapon = char:FindFirstChildOfClass("Tool")
-                if weapon then
-                    for _, enemy in pairs(workspace.Enemies:GetChildren()) do
-                        local hrp = enemy:FindFirstChild("HumanoidRootPart")
-                        if hrp and (hrp.Position - char.HumanoidRootPart.Position).Magnitude <= 20 then
-                            -- استدعاء ضربة اللعبة (تختلف حسب نسخة اللعبة)
-                            game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("hit", hrp.Position)
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    -- جلب الأعداء واللاعبين القريبين
+                    for _, target in pairs(workspace:GetDescendants()) do
+                        if target:FindFirstChild("Humanoid") and target ~= char then
+                            local root = target:FindFirstChild("HumanoidRootPart")
+                            if root then
+                                local distance = (root.Position - char.HumanoidRootPart.Position).Magnitude
+                                if distance <= 25 then -- نطاق الضرر
+                                    -- محاكاة الضرب
+                                    game:GetService("VirtualUser"):ClickButton1(Vector2.new())
+                                    local args = { [1] = root.Position, [2] = target }
+                                    game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("hit", unpack(args))
+                                end
+                            end
                         end
                     end
                 end
@@ -231,4 +182,59 @@ task.spawn(function()
     end
 end)
 
-print("STamPHub Loaded Successfully!")
+-- 3. تفعيل الأزرار والقوائم
+MainBtn.MouseButton1Click:Connect(function()
+    STampConfig.Enabled = not STampConfig.Enabled
+    MainBtn.Text = STampConfig.Enabled and "STamPHub On" or "STamPHub Off"
+    MainBtn.BackgroundColor3 = STampConfig.Enabled and Color3.fromRGB(40, 0, 0) or Color3.fromRGB(15, 15, 15)
+    
+    -- Aimbot Target Lock
+    if STampConfig.Enabled then
+        local maxDist = math.huge
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local d = (p.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if d < maxDist then
+                    maxDist = d
+                    STampConfig.Target = p.Character.HumanoidRootPart
+                end
+            end
+        end
+    else
+        STampConfig.Target = nil
+    end
+end)
+
+SettingsIcon.MouseButton1Click:Connect(function()
+    STampConfig.MenuVisible = not STampConfig.MenuVisible
+    MenuFrame.Visible = STampConfig.MenuVisible
+end)
+
+-- 4. ربط التبديلات (Toggles)
+AddToggle("Inf Energy", function(v) STampConfig.InfEnergy = v end)
+AddToggle("Fast Attack", function(v) STampConfig.FastAttack = v end)
+AddToggle("Auto V3", function(v) STampConfig.AutoV3 = v end)
+AddToggle("Auto V4", function(v) STampConfig.AutoV4 = v end)
+
+AddInput("Speed Edit", "16-200", function(v) if v then STampConfig.WalkSpeed = v end end)
+AddInput("Jump Edit", "50-500", function(v) if v then STampConfig.JumpPower = v end end)
+
+-- 5. حلقة التحديث المستمر (Energy & Aimbot)
+RunService.RenderStepped:Connect(function()
+    if STampConfig.Enabled and STampConfig.Target then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, STampConfig.Target.Position)
+    end
+    
+    if STampConfig.InfEnergy then
+        pcall(function()
+            local energy = LocalPlayer.Character:FindFirstChild("Energy") or LocalPlayer:FindFirstChild("Data"):FindFirstChild("Energy")
+            if energy then energy.Value = 10000 end
+        end)
+    end
+    
+    if STampConfig.AutoV3 and STampConfig.Enabled then
+        game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("ActivateAbility")
+    end
+end)
+
+print("STamPHub V2 Loaded - Draggable & Fixed Functions")
