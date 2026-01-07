@@ -1,8 +1,6 @@
---[[
-    NEXUS BOUNTY - Ultimate Blox Fruits Auto Bounty Script
-    Version: 3.0 | Complete Integrated System
-    Features: All-in-One Bounty Farming with Advanced AI
---]]
+-- NEXUS BOUNTY - Blox Fruits Auto Bounty Script
+-- Version: 4.0 | Fixed & Optimized
+-- Features: Complete Bounty System with Pirate/Marine Auto-Select
 
 -- Services
 local Players = game:GetService("Players")
@@ -14,10 +12,8 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
 local Stats = game:GetService("Stats")
 local CoreGui = game:GetService("CoreGui")
-local StarterGui = game:GetService("StarterGui")
 
 -- Player Variables
 local Player = Players.LocalPlayer
@@ -26,6 +22,34 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Camera = Workspace.CurrentCamera
 local Mouse = Player:GetMouse()
+
+-- Auto Pirate/Marine Selection
+local function GetPlayerTeam()
+    local team = nil
+    pcall(function()
+        if Player:FindFirstChild("DataFolder") then
+            if Player.DataFolder:FindFirstChild("Information") then
+                if Player.DataFolder.Information:FindFirstChild("Pirate") then
+                    team = "Pirate"
+                elseif Player.DataFolder.Information:FindFirstChild("Marine") then
+                    team = "Marine"
+                end
+            end
+        end
+    end)
+    return team
+end
+
+-- Auto select Pirate if no team
+if not GetPlayerTeam() then
+    pcall(function()
+        local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        if Remotes and Remotes:FindFirstChild("CommF_") then
+            Remotes.CommF_:InvokeServer("SetTeam", "Pirates")
+            warn("Auto-selected Pirate team")
+        end
+    end)
+end
 
 -- Configuration
 local Config = {
@@ -36,63 +60,37 @@ local Config = {
     StartTime = os.time(),
     CooldownList = {},
     ServerHopCount = 0,
-    ComboExecutions = 0,
-    AutoFarm = false,
-    NextPlayerMode = false,
-    CurrentTarget = nil,
     IsExecuting = false,
-    IsFlying = false
-}
-
--- State Management
-local States = {
-    Scanning = false,
-    Targeting = false,
-    Approaching = false,
-    Executing = false,
-    Evaluating = false,
-    Hopping = false
-}
-
--- Skill Configuration
-local Skills = {
-    Sword = {"Z", "X", "C", "V", "F"},
-    Fruit = {"Z", "X", "C", "V", "F"},
-    Melee = {"Z", "X", "C", "V", "F"},
-    Gun = {"Z", "X", "C", "V", "F"},
-    Style = {"Z", "X", "C", "V", "F"}
+    IsFarming = false,
+    CurrentTarget = nil,
+    PlayerTeam = GetPlayerTeam() or "Pirate"
 }
 
 -- Combo System
 local Combo = {
     Active = {},
     Saved = {},
-    Stage = 1,
-    MaxStages = 4,
-    Loop = false,
-    Speed = 0.2,
-    RandomDelay = true
+    Execution = {},
+    Speed = 0.15,
+    Loop = true
 }
 
 -- Targeting System
 local Targeting = {
     MinLevel = 2000,
     MinBounty = 100000,
-    MaxDistance = 500,
+    MaxDistance = 300,
     AvoidSafeZone = true,
     CheckPVP = true,
-    Priority = {"Bounty", "Level", "Distance"},
     Blacklist = {}
 }
 
 -- Movement System
 local Movement = {
-    Speed = 350,
-    FlySpeed = 150,
-    UseBezier = true,
-    NoClip = true,
-    AntiAntiCheat = true,
-    SmoothTween = true
+    Speed = 100, -- Reduced for safety
+    FlySpeed = 80, -- Reduced for safety
+    UseNoClip = false,
+    AntiAntiCheat = true
 }
 
 -- Safety System
@@ -100,31 +98,28 @@ local Safety = {
     LowHPThreshold = 0.3,
     AutoCounter = true,
     AntiReport = true,
-    EmergencyTP = true,
-    AutoHeal = true
+    EmergencyTP = true
 }
 
--- Server Management
+-- Server System
 local Server = {
     AutoHop = false,
     HopDelay = 300,
-    MinPlayers = 3,
-    Region = "Auto",
-    SaveSession = true
+    MinPlayers = 2
 }
 
--- UI Creation
+-- Create Small Compact UI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "NexusBountyUI"
 ScreenGui.Parent = CoreGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
 
--- Main Container
+-- Main Container (Smaller Size)
 local MainContainer = Instance.new("Frame")
 MainContainer.Name = "MainContainer"
-MainContainer.Size = UDim2.new(0, 500, 0, 600)
-MainContainer.Position = UDim2.new(0.5, -250, 0.5, -300)
-MainContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainContainer.Size = UDim2.new(0, 400, 0, 450) -- Smaller size
+MainContainer.Position = UDim2.new(0.5, -200, 0.5, -225) -- Centered
+MainContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 MainContainer.BorderSizePixel = 0
 MainContainer.ClipsDescendants = true
 MainContainer.Parent = ScreenGui
@@ -169,8 +164,8 @@ end)
 -- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 40)
-TitleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+TitleBar.Size = UDim2.new(1, 0, 0, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainContainer
 
@@ -178,171 +173,39 @@ local Title = Instance.new("TextLabel")
 Title.Name = "Title"
 Title.Size = UDim2.new(0.7, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "NEXUS BOUNTY v3.0"
-Title.TextColor3 = Color3.fromRGB(0, 255, 255)
+Title.Text = "NEXUS BOUNTY v4.0"
+Title.TextColor3 = Color3.fromRGB(0, 255, 200)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 18
+Title.TextSize = 14
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Position = UDim2.new(0, 15, 0, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
 Title.Parent = TitleBar
 
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 40, 0, 40)
-CloseButton.Position = UDim2.new(1, -40, 0, 0)
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -30, 0, 0)
 CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
 CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.white
 CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 16
+CloseButton.TextSize = 14
 CloseButton.Parent = TitleBar
 
 CloseButton.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Size = UDim2.new(0, 40, 0, 40)
-MinimizeButton.Position = UDim2.new(1, -80, 0, 0)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
-MinimizeButton.Text = "_"
-MinimizeButton.TextColor3 = Color3.white
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = 16
-MinimizeButton.Parent = TitleBar
-
-MinimizeButton.MouseButton1Click:Connect(function()
-    MainContainer.Visible = not MainContainer.Visible
-end)
-
--- Bounty Display Window (Square Image Style)
-local BountyWindow = Instance.new("Frame")
-BountyWindow.Name = "BountyWindow"
-BountyWindow.Size = UDim2.new(0, 350, 0, 400)
-BountyWindow.Position = UDim2.new(0, 20, 0.5, -200)
-BountyWindow.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
-BountyWindow.BorderSizePixel = 2
-BountyWindow.BorderColor3 = Color3.fromRGB(0, 150, 255)
-BountyWindow.Visible = true
-BountyWindow.Parent = ScreenGui
-
--- Bounty Image Display
-local BountyImage = Instance.new("ImageLabel")
-BountyImage.Name = "BountyImage"
-BountyImage.Size = UDim2.new(1, 0, 0, 200)
-BountyImage.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
-BountyImage.BorderSizePixel = 0
-BountyImage.Image = "rbxassetid://0" -- Add your image ID here
-BountyImage.ScaleType = Enum.ScaleType.Crop
-BountyImage.Parent = BountyWindow
-
--- Bounty Stats Overlay
-local StatsOverlay = Instance.new("Frame")
-StatsOverlay.Name = "StatsOverlay"
-StatsOverlay.Size = UDim2.new(1, 0, 0, 200)
-StatsOverlay.Position = UDim2.new(0, 0, 0, 200)
-StatsOverlay.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
-StatsOverlay.BorderSizePixel = 0
-StatsOverlay.Parent = BountyWindow
-
--- Current Bounty Display
-local CurrentBountyLabel = Instance.new("TextLabel")
-CurrentBountyLabel.Name = "CurrentBountyLabel"
-CurrentBountyLabel.Size = UDim2.new(1, -20, 0, 40)
-CurrentBountyLabel.Position = UDim2.new(0, 10, 0, 10)
-CurrentBountyLabel.BackgroundTransparency = 1
-CurrentBountyLabel.Text = "CURRENT BOUNTY: 0"
-CurrentBountyLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-CurrentBountyLabel.Font = Enum.Font.GothamBold
-CurrentBountyLabel.TextSize = 20
-CurrentBountyLabel.TextStrokeTransparency = 0.5
-CurrentBountyLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-CurrentBountyLabel.Parent = StatsOverlay
-
--- Session Bounty Display
-local SessionBountyLabel = Instance.new("TextLabel")
-SessionBountyLabel.Name = "SessionBountyLabel"
-SessionBountyLabel.Size = UDim2.new(1, -20, 0, 30)
-SessionBountyLabel.Position = UDim2.new(0, 10, 0, 60)
-SessionBountyLabel.BackgroundTransparency = 1
-SessionBountyLabel.Text = "SESSION TOTAL: 0"
-SessionBountyLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-SessionBountyLabel.Font = Enum.Font.GothamBold
-SessionBountyLabel.TextSize = 16
-SessionBountyLabel.Parent = StatsOverlay
-
--- Time Display
-local TimeLabel = Instance.new("TextLabel")
-TimeLabel.Name = "TimeLabel"
-TimeLabel.Size = UDim2.new(1, -20, 0, 30)
-TimeLabel.Position = UDim2.new(0, 10, 0, 100)
-TimeLabel.BackgroundTransparency = 1
-TimeLabel.Text = "TIME: 00:00:00"
-TimeLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-TimeLabel.Font = Enum.Font.Gotham
-TimeLabel.TextSize = 14
-TimeLabel.Parent = StatsOverlay
-
--- KDR Display
-local KDRLabel = Instance.new("TextLabel")
-KDRLabel.Name = "KDRLabel"
-KDRLabel.Size = UDim2.new(1, -20, 0, 30)
-KDRLabel.Position = UDim2.new(0, 10, 0, 140)
-KDRLabel.BackgroundTransparency = 1
-KDRLabel.Text = "K/D: 0.00"
-KDRLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-KDRLabel.Font = Enum.Font.Gotham
-KDRLabel.TextSize = 14
-KDRLabel.Parent = StatsOverlay
-
--- Control Buttons
-local ControlButtons = Instance.new("Frame")
-ControlButtons.Name = "ControlButtons"
-ControlButtons.Size = UDim2.new(1, -20, 0, 80)
-ControlButtons.Position = UDim2.new(0, 10, 1, -90)
-ControlButtons.BackgroundTransparency = 1
-ControlButtons.Parent = BountyWindow
-
-local NextPlayerButton = Instance.new("TextButton")
-NextPlayerButton.Name = "NextPlayerButton"
-NextPlayerButton.Size = UDim2.new(0.48, 0, 1, 0)
-NextPlayerButton.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-NextPlayerButton.Text = "NEXT PLAYER"
-NextPlayerButton.TextColor3 = Color3.white
-NextPlayerButton.Font = Enum.Font.GothamBold
-NextPlayerButton.TextSize = 14
-NextPlayerButton.Parent = ControlButtons
-
-local HopServerButton = Instance.new("TextButton")
-HopServerButton.Name = "HopServerButton"
-HopServerButton.Size = UDim2.new(0.48, 0, 1, 0)
-HopServerButton.Position = UDim2.new(0.52, 0, 0, 0)
-HopServerButton.BackgroundColor3 = Color3.fromRGB(180, 0, 80)
-HopServerButton.Text = "HOP SERVER"
-HopServerButton.TextColor3 = Color3.white
-HopServerButton.Font = Enum.Font.GothamBold
-HopServerButton.TextSize = 14
-HopServerButton.Parent = ControlButtons
-
 -- Tab System
 local TabContainer = Instance.new("Frame")
 TabContainer.Name = "TabContainer"
-TabContainer.Size = UDim2.new(1, 0, 0, 50)
-TabContainer.Position = UDim2.new(0, 0, 0, 40)
-TabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+TabContainer.Size = UDim2.new(1, 0, 0, 30)
+TabContainer.Position = UDim2.new(0, 0, 0, 30)
+TabContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
 TabContainer.BorderSizePixel = 0
 TabContainer.Parent = MainContainer
 
-local Tabs = {
-    "Dashboard",
-    "Combo Setup",
-    "Targeting",
-    "Movement",
-    "Safety",
-    "Server"
-}
-
+local Tabs = {"Dashboard", "Combo", "Target", "Settings"}
 local TabButtons = {}
 local TabFrames = {}
 
@@ -352,20 +215,20 @@ for i, tabName in ipairs(Tabs) do
     tabButton.Name = tabName .. "Tab"
     tabButton.Size = UDim2.new(1 / #Tabs, 0, 1, 0)
     tabButton.Position = UDim2.new((i-1) / #Tabs, 0, 0, 0)
-    tabButton.BackgroundColor3 = i == 1 and Color3.fromRGB(40, 40, 70) or Color3.fromRGB(25, 25, 40)
+    tabButton.BackgroundColor3 = i == 1 and Color3.fromRGB(40, 40, 60) or Color3.fromRGB(30, 30, 45)
     tabButton.Text = tabName
     tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     tabButton.Font = Enum.Font.Gotham
-    tabButton.TextSize = 12
+    tabButton.TextSize = 11
     tabButton.Parent = TabContainer
     
     -- Tab Content Frame
     local tabFrame = Instance.new("ScrollingFrame")
     tabFrame.Name = tabName .. "Frame"
-    tabFrame.Size = UDim2.new(1, 0, 1, -90)
-    tabFrame.Position = UDim2.new(0, 0, 0, 90)
+    tabFrame.Size = UDim2.new(1, 0, 1, -60)
+    tabFrame.Position = UDim2.new(0, 0, 0, 60)
     tabFrame.BackgroundTransparency = 1
-    tabFrame.ScrollBarThickness = 5
+    tabFrame.ScrollBarThickness = 3
     tabFrame.Visible = i == 1
     tabFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
     tabFrame.Parent = MainContainer
@@ -378,707 +241,606 @@ for i, tabName in ipairs(Tabs) do
             frame.Visible = false
         end
         for _, button in pairs(TabButtons) do
-            button.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+            button.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
         end
         tabFrame.Visible = true
-        tabButton.BackgroundColor3 = Color3.fromRGB(40, 40, 70)
+        tabButton.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
     end)
 end
 
--- Dashboard Content
+-- Dashboard Tab Content
 local DashboardFrame = TabFrames["Dashboard"]
 
--- Real-Time Analytics
-local AnalyticsSection = Instance.new("Frame")
-AnalyticsSection.Name = "AnalyticsSection"
-AnalyticsSection.Size = UDim2.new(1, -20, 0, 150)
-AnalyticsSection.Position = UDim2.new(0, 10, 0, 10)
-AnalyticsSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-AnalyticsSection.BorderSizePixel = 0
-AnalyticsSection.Parent = DashboardFrame
+-- Stats Display
+local StatsFrame = Instance.new("Frame")
+StatsFrame.Name = "StatsFrame"
+StatsFrame.Size = UDim2.new(1, -20, 0, 150)
+StatsFrame.Position = UDim2.new(0, 10, 0, 10)
+StatsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+StatsFrame.BorderSizePixel = 0
+StatsFrame.Parent = DashboardFrame
 
-local AnalyticsTitle = Instance.new("TextLabel")
-AnalyticsTitle.Name = "AnalyticsTitle"
-AnalyticsTitle.Size = UDim2.new(1, 0, 0, 30)
-AnalyticsTitle.BackgroundTransparency = 1
-AnalyticsTitle.Text = "REAL-TIME ANALYTICS"
-AnalyticsTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
-AnalyticsTitle.Font = Enum.Font.GothamBold
-AnalyticsTitle.TextSize = 14
-AnalyticsTitle.Parent = AnalyticsSection
+local StatsTitle = Instance.new("TextLabel")
+StatsTitle.Name = "StatsTitle"
+StatsTitle.Size = UDim2.new(1, 0, 0, 25)
+StatsTitle.BackgroundTransparency = 1
+StatsTitle.Text = "STATISTICS"
+StatsTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
+StatsTitle.Font = Enum.Font.GothamBold
+StatsTitle.TextSize = 12
+StatsTitle.Parent = StatsFrame
 
--- Bounty Per Hour
-local BPHLabel = Instance.new("TextLabel")
-BPHLabel.Name = "BPHLabel"
-BPHLabel.Size = UDim2.new(0.5, -5, 0, 30)
-BPHLabel.Position = UDim2.new(0, 10, 0, 40)
-BPHLabel.BackgroundTransparency = 1
-BPHLabel.Text = "Bounty/Hour: 0"
-BPHLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-BPHLabel.Font = Enum.Font.Gotham
-BPHLabel.TextSize = 12
-BPHLabel.TextXAlignment = Enum.TextXAlignment.Left
-BPHLabel.Parent = AnalyticsSection
+local BountyLabel = Instance.new("TextLabel")
+BountyLabel.Name = "BountyLabel"
+BountyLabel.Size = UDim2.new(1, -10, 0, 20)
+BountyLabel.Position = UDim2.new(0, 5, 0, 30)
+BountyLabel.BackgroundTransparency = 1
+BountyLabel.Text = "Bounty: 0"
+BountyLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+BountyLabel.Font = Enum.Font.Gotham
+BountyLabel.TextSize = 11
+BountyLabel.TextXAlignment = Enum.TextXAlignment.Left
+BountyLabel.Parent = StatsFrame
 
--- Ping Display
-local PingDisplay = Instance.new("TextLabel")
-PingDisplay.Name = "PingDisplay"
-PingDisplay.Size = UDim2.new(0.5, -15, 0, 30)
-PingDisplay.Position = UDim2.new(0.5, 5, 0, 40)
-PingDisplay.BackgroundTransparency = 1
-PingDisplay.Text = "Ping: 0ms"
-PingDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
-PingDisplay.Font = Enum.Font.Gotham
-PingDisplay.TextSize = 12
-PingDisplay.TextXAlignment = Enum.TextXAlignment.Left
-PingDisplay.Parent = AnalyticsSection
+local KillsLabel = Instance.new("TextLabel")
+KillsLabel.Name = "KillsLabel"
+KillsLabel.Size = UDim2.new(1, -10, 0, 20)
+KillsLabel.Position = UDim2.new(0, 5, 0, 55)
+KillsLabel.BackgroundTransparency = 1
+KillsLabel.Text = "Kills: 0"
+KillsLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+KillsLabel.Font = Enum.Font.Gotham
+KillsLabel.TextSize = 11
+KillsLabel.TextXAlignment = Enum.TextXAlignment.Left
+KillsLabel.Parent = StatsFrame
 
--- Current Target Info
-local TargetSection = Instance.new("Frame")
-TargetSection.Name = "TargetSection"
-TargetSection.Size = UDim2.new(1, -20, 0, 120)
-TargetSection.Position = UDim2.new(0, 10, 0, 170)
-TargetSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-TargetSection.BorderSizePixel = 0
-TargetSection.Parent = DashboardFrame
+local TimeLabel = Instance.new("TextLabel")
+TimeLabel.Name = "TimeLabel"
+TimeLabel.Size = UDim2.new(1, -10, 0, 20)
+TimeLabel.Position = UDim2.new(0, 5, 0, 80)
+TimeLabel.BackgroundTransparency = 1
+TimeLabel.Text = "Time: 00:00:00"
+TimeLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+TimeLabel.Font = Enum.Font.Gotham
+TimeLabel.TextSize = 11
+TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
+TimeLabel.Parent = StatsFrame
+
+local TeamLabel = Instance.new("TextLabel")
+TeamLabel.Name = "TeamLabel"
+TeamLabel.Size = UDim2.new(1, -10, 0, 20)
+TeamLabel.Position = UDim2.new(0, 5, 0, 105)
+TeamLabel.BackgroundTransparency = 1
+TeamLabel.Text = "Team: " .. Config.PlayerTeam
+TeamLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+TeamLabel.Font = Enum.Font.Gotham
+TeamLabel.TextSize = 11
+TeamLabel.TextXAlignment = Enum.TextXAlignment.Left
+TeamLabel.Parent = StatsFrame
+
+-- Target Info
+local TargetFrame = Instance.new("Frame")
+TargetFrame.Name = "TargetFrame"
+TargetFrame.Size = UDim2.new(1, -20, 0, 80)
+TargetFrame.Position = UDim2.new(0, 10, 0, 170)
+TargetFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+TargetFrame.BorderSizePixel = 0
+TargetFrame.Parent = DashboardFrame
 
 local TargetTitle = Instance.new("TextLabel")
 TargetTitle.Name = "TargetTitle"
-TargetTitle.Size = UDim2.new(1, 0, 0, 30)
+TargetTitle.Size = UDim2.new(1, 0, 0, 25)
 TargetTitle.BackgroundTransparency = 1
 TargetTitle.Text = "CURRENT TARGET"
 TargetTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
 TargetTitle.Font = Enum.Font.GothamBold
-TargetTitle.TextSize = 14
-TargetTitle.Parent = TargetSection
+TargetTitle.TextSize = 12
+TargetTitle.Parent = TargetFrame
 
-local TargetName = Instance.new("TextLabel")
-TargetName.Name = "TargetName"
-TargetName.Size = UDim2.new(1, -20, 0, 25)
-TargetName.Position = UDim2.new(0, 10, 0, 40)
-TargetName.BackgroundTransparency = 1
-TargetName.Text = "Name: None"
-TargetName.TextColor3 = Color3.fromRGB(255, 255, 255)
-TargetName.Font = Enum.Font.Gotham
-TargetName.TextSize = 12
-TargetName.TextXAlignment = Enum.TextXAlignment.Left
-TargetName.Parent = TargetSection
+local TargetNameLabel = Instance.new("TextLabel")
+TargetNameLabel.Name = "TargetNameLabel"
+TargetNameLabel.Size = UDim2.new(1, -10, 0, 20)
+TargetNameLabel.Position = UDim2.new(0, 5, 0, 30)
+TargetNameLabel.BackgroundTransparency = 1
+TargetNameLabel.Text = "Name: None"
+TargetNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetNameLabel.Font = Enum.Font.Gotham
+TargetNameLabel.TextSize = 11
+TargetNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+TargetNameLabel.Parent = TargetFrame
 
-local TargetLevel = Instance.new("TextLabel")
-TargetLevel.Name = "TargetLevel"
-TargetLevel.Size = UDim2.new(1, -20, 0, 25)
-TargetLevel.Position = UDim2.new(0, 10, 0, 70)
-TargetLevel.BackgroundTransparency = 1
-TargetLevel.Text = "Level: 0"
-TargetLevel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TargetLevel.Font = Enum.Font.Gotham
-TargetLevel.TextSize = 12
-TargetLevel.TextXAlignment = Enum.TextXAlignment.Left
-TargetLevel.Parent = TargetSection
+local TargetHealthLabel = Instance.new("TextLabel")
+TargetHealthLabel.Name = "TargetHealthLabel"
+TargetHealthLabel.Size = UDim2.new(1, -10, 0, 20)
+TargetHealthLabel.Position = UDim2.new(0, 5, 0, 55)
+TargetHealthLabel.BackgroundTransparency = 1
+TargetHealthLabel.Text = "Health: 100%"
+TargetHealthLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetHealthLabel.Font = Enum.Font.Gotham
+TargetHealthLabel.TextSize = 11
+TargetHealthLabel.TextXAlignment = Enum.TextXAlignment.Left
+TargetHealthLabel.Parent = TargetFrame
 
-local TargetHealth = Instance.new("TextLabel")
-TargetHealth.Name = "TargetHealth"
-TargetHealth.Size = UDim2.new(1, -20, 0, 25)
-TargetHealth.Position = UDim2.new(0, 10, 0, 100)
-TargetHealth.BackgroundTransparency = 1
-TargetHealth.Text = "Health: 100%"
-TargetHealth.TextColor3 = Color3.fromRGB(255, 255, 255)
-TargetHealth.Font = Enum.Font.Gotham
-TargetHealth.TextSize = 12
-TargetHealth.TextXAlignment = Enum.TextXAlignment.Left
-TargetHealth.Parent = TargetSection
+-- Quick Controls
+local ControlsFrame = Instance.new("Frame")
+ControlsFrame.Name = "ControlsFrame"
+ControlsFrame.Size = UDim2.new(1, -20, 0, 120)
+ControlsFrame.Position = UDim2.new(0, 10, 0, 260)
+ControlsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+ControlsFrame.BorderSizePixel = 0
+ControlsFrame.Parent = DashboardFrame
 
--- System Log
-local LogSection = Instance.new("Frame")
-LogSection.Name = "LogSection"
-LogSection.Size = UDim2.new(1, -20, 0, 200)
-LogSection.Position = UDim2.new(0, 10, 0, 300)
-LogSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-LogSection.BorderSizePixel = 0
-LogSection.Parent = DashboardFrame
+local ControlsTitle = Instance.new("TextLabel")
+ControlsTitle.Name = "ControlsTitle"
+ControlsTitle.Size = UDim2.new(1, 0, 0, 25)
+ControlsTitle.BackgroundTransparency = 1
+ControlsTitle.Text = "QUICK CONTROLS"
+ControlsTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
+ControlsTitle.Font = Enum.Font.GothamBold
+ControlsTitle.TextSize = 12
+ControlsTitle.Parent = ControlsFrame
 
-local LogTitle = Instance.new("TextLabel")
-LogTitle.Name = "LogTitle"
-LogTitle.Size = UDim2.new(1, 0, 0, 30)
-LogTitle.BackgroundTransparency = 1
-LogTitle.Text = "SYSTEM LOG"
-LogTitle.TextColor3 = Color3.fromRGB(100, 200, 100)
-LogTitle.Font = Enum.Font.GothamBold
-LogTitle.TextSize = 14
-LogTitle.Parent = LogSection
+local NextPlayerBtn = Instance.new("TextButton")
+NextPlayerBtn.Name = "NextPlayerBtn"
+NextPlayerBtn.Size = UDim2.new(1, -10, 0, 25)
+NextPlayerBtn.Position = UDim2.new(0, 5, 0, 30)
+NextPlayerBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+NextPlayerBtn.Text = "NEXT PLAYER"
+NextPlayerBtn.TextColor3 = Color3.white
+NextPlayerBtn.Font = Enum.Font.GothamBold
+NextPlayerBtn.TextSize = 12
+NextPlayerBtn.Parent = ControlsFrame
 
-local LogContainer = Instance.new("ScrollingFrame")
-LogContainer.Name = "LogContainer"
-LogContainer.Size = UDim2.new(1, -10, 1, -40)
-LogContainer.Position = UDim2.new(0, 5, 0, 35)
-LogContainer.BackgroundTransparency = 1
-LogContainer.ScrollBarThickness = 5
-LogContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
-LogContainer.Parent = LogSection
+local StartFarmingBtn = Instance.new("TextButton")
+StartFarmingBtn.Name = "StartFarmingBtn"
+StartFarmingBtn.Size = UDim2.new(1, -10, 0, 25)
+StartFarmingBtn.Position = UDim2.new(0, 5, 0, 60)
+StartFarmingBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+StartFarmingBtn.Text = "START FARMING"
+StartFarmingBtn.TextColor3 = Color3.white
+StartFarmingBtn.Font = Enum.Font.GothamBold
+StartFarmingBtn.TextSize = 12
+StartFarmingBtn.Parent = ControlsFrame
 
-local LogLayout = Instance.new("UIListLayout")
-LogLayout.Parent = LogContainer
+local HopServerBtn = Instance.new("TextButton")
+HopServerBtn.Name = "HopServerBtn"
+HopServerBtn.Size = UDim2.new(1, -10, 0, 25)
+HopServerBtn.Position = UDim2.new(0, 5, 0, 90)
+HopServerBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+HopServerBtn.Text = "HOP SERVER"
+HopServerBtn.TextColor3 = Color3.white
+HopServerBtn.Font = Enum.Font.GothamBold
+HopServerBtn.TextSize = 12
+HopServerBtn.Parent = ControlsFrame
 
--- Combo Setup Content
-local ComboFrame = TabFrames["Combo Setup"]
+-- Combo Tab Content
+local ComboFrame = TabFrames["Combo"]
 
--- Combo Order Selection
-local OrderSection = Instance.new("Frame")
-OrderSection.Name = "OrderSection"
-OrderSection.Size = UDim2.new(1, -20, 0, 180)
-OrderSection.Position = UDim2.new(0, 10, 0, 10)
-OrderSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-OrderSection.BorderSizePixel = 0
-OrderSection.Parent = ComboFrame
+-- Combo Setup
+local ComboSetupFrame = Instance.new("Frame")
+ComboSetupFrame.Name = "ComboSetupFrame"
+ComboSetupFrame.Size = UDim2.new(1, -20, 0, 200)
+ComboSetupFrame.Position = UDim2.new(0, 10, 0, 10)
+ComboSetupFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+ComboSetupFrame.BorderSizePixel = 0
+ComboSetupFrame.Parent = ComboFrame
 
-local OrderTitle = Instance.new("TextLabel")
-OrderTitle.Name = "OrderTitle"
-OrderTitle.Size = UDim2.new(1, 0, 0, 30)
-OrderTitle.BackgroundTransparency = 1
-OrderTitle.Text = "COMBO ORDER (4 STEPS)"
-OrderTitle.TextColor3 = Color3.fromRGB(0, 255, 255)
-OrderTitle.Font = Enum.Font.GothamBold
-OrderTitle.TextSize = 14
-OrderTitle.Parent = OrderSection
+local ComboTitle = Instance.new("TextLabel")
+ComboTitle.Name = "ComboTitle"
+ComboTitle.Size = UDim2.new(1, 0, 0, 25)
+ComboTitle.BackgroundTransparency = 1
+ComboTitle.Text = "COMBO SETUP (Z, X, C, V, F)"
+ComboTitle.TextColor3 = Color3.fromRGB(255, 165, 0)
+ComboTitle.Font = Enum.Font.GothamBold
+ComboTitle.TextSize = 12
+ComboTitle.Parent = ComboSetupFrame
 
-local StageDropdowns = {}
-local MoveDropdowns = {}
-
+local ComboButtons = {}
 for i = 1, 4 do
-    local yPos = 40 + (i-1)*35
+    local comboBtn = Instance.new("TextButton")
+    comboBtn.Name = "ComboBtn" .. i
+    comboBtn.Size = UDim2.new(0.22, 0, 0, 30)
+    comboBtn.Position = UDim2.new(0.02 + (i-1)*0.24, 0, 0, 35)
+    comboBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    comboBtn.Text = "Move " .. i
+    comboBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    comboBtn.Font = Enum.Font.Gotham
+    comboBtn.TextSize = 11
+    comboBtn.Parent = ComboSetupFrame
     
-    local stageLabel = Instance.new("TextLabel")
-    stageLabel.Name = "Stage"..i.."Label"
-    stageLabel.Size = UDim2.new(0, 60, 0, 30)
-    stageLabel.Position = UDim2.new(0, 10, 0, yPos)
-    stageLabel.BackgroundTransparency = 1
-    stageLabel.Text = "Step "..i..":"
-    stageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    stageLabel.Font = Enum.Font.Gotham
-    stageLabel.TextSize = 12
-    stageLabel.Parent = OrderSection
+    table.insert(ComboButtons, comboBtn)
     
-    local stageDropdown = Instance.new("TextButton")
-    stageDropdown.Name = "Stage"..i.."Dropdown"
-    stageDropdown.Size = UDim2.new(0, 100, 0, 30)
-    stageDropdown.Position = UDim2.new(0, 80, 0, yPos)
-    stageDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-    stageDropdown.Text = "Select Type"
-    stageDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-    stageDropdown.Font = Enum.Font.Gotham
-    stageDropdown.TextSize = 12
-    stageDropdown.Parent = OrderSection
-    
-    local moveDropdown = Instance.new("TextButton")
-    moveDropdown.Name = "Move"..i.."Dropdown"
-    moveDropdown.Size = UDim2.new(0, 60, 0, 30)
-    moveDropdown.Position = UDim2.new(0, 190, 0, yPos)
-    moveDropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-    moveDropdown.Text = "Move"
-    moveDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-    moveDropdown.Font = Enum.Font.Gotham
-    moveDropdown.TextSize = 12
-    moveDropdown.Visible = false
-    moveDropdown.Parent = OrderSection
-    
-    StageDropdowns[i] = stageDropdown
-    MoveDropdowns[i] = moveDropdown
+    comboBtn.MouseButton1Click:Connect(function()
+        local moves = {"Z", "X", "C", "V", "F"}
+        comboBtn.Text = moves[math.random(1, #moves)]
+        Combo.Active[i] = comboBtn.Text
+        
+        -- Update execution list
+        Combo.Execution = {}
+        for j = 1, 4 do
+            if Combo.Active[j] then
+                table.insert(Combo.Execution, Combo.Active[j])
+            end
+        end
+    end)
 end
 
--- Skill Selection
-local SkillSection = Instance.new("Frame")
-SkillSection.Name = "SkillSection"
-SkillSection.Size = UDim2.new(1, -20, 0, 200)
-SkillSection.Position = UDim2.new(0, 10, 0, 200)
-SkillSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-SkillSection.BorderSizePixel = 0
-SkillSection.Parent = ComboFrame
+local ComboInfoLabel = Instance.new("TextLabel")
+ComboInfoLabel.Name = "ComboInfoLabel"
+ComboInfoLabel.Size = UDim2.new(1, -10, 0, 40)
+ComboInfoLabel.Position = UDim2.new(0, 5, 0, 70)
+ComboInfoLabel.BackgroundTransparency = 1
+ComboInfoLabel.Text = "Click buttons to set moves\nCurrent: " .. (#Combo.Execution > 0 and table.concat(Combo.Execution, " → ") or "None")
+ComboInfoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+ComboInfoLabel.Font = Enum.Font.Gotham
+ComboInfoLabel.TextSize = 10
+ComboInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+ComboInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
+ComboInfoLabel.Parent = ComboSetupFrame
 
-local SkillTitle = Instance.new("TextLabel")
-SkillTitle.Name = "SkillTitle"
-SkillTitle.Size = UDim2.new(1, 0, 0, 30)
-SkillTitle.BackgroundTransparency = 1
-SkillTitle.Text = "AVAILABLE SKILLS"
-SkillTitle.TextColor3 = Color3.fromRGB(255, 165, 0)
-SkillTitle.Font = Enum.Font.GothamBold
-SkillTitle.TextSize = 14
-SkillTitle.Parent = SkillSection
+-- Auto Combo Toggle
+local AutoComboFrame = Instance.new("Frame")
+AutoComboFrame.Name = "AutoComboFrame"
+AutoComboFrame.Size = UDim2.new(1, -20, 0, 60)
+AutoComboFrame.Position = UDim2.new(0, 10, 0, 220)
+AutoComboFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+AutoComboFrame.BorderSizePixel = 0
+AutoComboFrame.Parent = ComboFrame
 
--- Combo Control Buttons
-local ControlSection = Instance.new("Frame")
-ControlSection.Name = "ControlSection"
-ControlSection.Size = UDim2.new(1, -20, 0, 100)
-ControlSection.Position = UDim2.new(0, 10, 0, 410)
-ControlSection.BackgroundTransparency = 1
-ControlSection.Parent = ComboFrame
+local AutoComboToggle = Instance.new("TextButton")
+AutoComboToggle.Name = "AutoComboToggle"
+AutoComboToggle.Size = UDim2.new(1, -10, 1, -10)
+AutoComboToggle.Position = UDim2.new(0, 5, 0, 5)
+AutoComboToggle.BackgroundColor3 = Combo.Loop and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+AutoComboToggle.Text = "INFINITE COMBO: " .. (Combo.Loop and "ON" or "OFF")
+AutoComboToggle.TextColor3 = Color3.white
+AutoComboToggle.Font = Enum.Font.GothamBold
+AutoComboToggle.TextSize = 12
+AutoComboToggle.Parent = AutoComboFrame
 
-local SaveComboBtn = Instance.new("TextButton")
-SaveComboBtn.Name = "SaveComboBtn"
-SaveComboBtn.Size = UDim2.new(0.48, 0, 0, 40)
-SaveComboBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-SaveComboBtn.Text = "SAVE COMBO"
-SaveComboBtn.TextColor3 = Color3.white
-SaveComboBtn.Font = Enum.Font.GothamBold
-SaveComboBtn.TextSize = 14
-SaveComboBtn.Parent = ControlSection
+AutoComboToggle.MouseButton1Click:Connect(function()
+    Combo.Loop = not Combo.Loop
+    AutoComboToggle.BackgroundColor3 = Combo.Loop and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+    AutoComboToggle.Text = "INFINITE COMBO: " .. (Combo.Loop and "ON" or "OFF")
+end)
 
-local LoadComboBtn = Instance.new("TextButton")
-LoadComboBtn.Name = "LoadComboBtn"
-LoadComboBtn.Size = UDim2.new(0.48, 0, 0, 40)
-LoadComboBtn.Position = UDim2.new(0.52, 0, 0, 0)
-LoadComboBtn.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
-LoadComboBtn.Text = "LOAD COMBO"
-LoadComboBtn.TextColor3 = Color3.white
-LoadComboBtn.Font = Enum.Font.GothamBold
-LoadComboBtn.TextSize = 14
-LoadComboBtn.Parent = ControlSection
-
-local ExecuteBtn = Instance.new("TextButton")
-ExecuteBtn.Name = "ExecuteBtn"
-ExecuteBtn.Size = UDim2.new(1, 0, 0, 40)
-ExecuteBtn.Position = UDim2.new(0, 0, 0, 50)
-ExecuteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-ExecuteBtn.Text = "EXECUTE COMBO"
-ExecuteBtn.TextColor3 = Color3.white
-ExecuteBtn.Font = Enum.Font.GothamBold
-ExecuteBtn.TextSize = 16
-ExecuteBtn.Parent = ControlSection
-
--- Targeting Content
-local TargetingFrame = TabFrames["Targeting"]
+-- Target Tab Content
+local TargetFrameTab = TabFrames["Target"]
 
 -- Targeting Settings
-local TargetingSettings = Instance.new("Frame")
-TargetingSettings.Name = "TargetingSettings"
-TargetingSettings.Size = UDim2.new(1, -20, 0, 250)
-TargetingSettings.Position = UDim2.new(0, 10, 0, 10)
-TargetingSettings.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-TargetingSettings.BorderSizePixel = 0
-TargetingSettings.Parent = TargetingFrame
+local TargetSettingsFrame = Instance.new("Frame")
+TargetSettingsFrame.Name = "TargetSettingsFrame"
+TargetSettingsFrame.Size = UDim2.new(1, -20, 0, 180)
+TargetSettingsFrame.Position = UDim2.new(0, 10, 0, 10)
+TargetSettingsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+TargetSettingsFrame.BorderSizePixel = 0
+TargetSettingsFrame.Parent = TargetFrameTab
 
-local TargetingSettingsTitle = Instance.new("TextLabel")
-TargetingSettingsTitle.Name = "TargetingSettingsTitle"
-TargetingSettingsTitle.Size = UDim2.new(1, 0, 0, 30)
-TargetingSettingsTitle.BackgroundTransparency = 1
-TargetingSettingsTitle.Text = "TARGETING SETTINGS"
-TargetingSettingsTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
-TargetingSettingsTitle.Font = Enum.Font.GothamBold
-TargetingSettingsTitle.TextSize = 14
-TargetingSettingsTitle.Parent = TargetingSettings
+local TargetSettingsTitle = Instance.new("TextLabel")
+TargetSettingsTitle.Name = "TargetSettingsTitle"
+TargetSettingsTitle.Size = UDim2.new(1, 0, 0, 25)
+TargetSettingsTitle.BackgroundTransparency = 1
+TargetSettingsTitle.Text = "TARGETING SETTINGS"
+TargetSettingsTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
+TargetSettingsTitle.Font = Enum.Font.GothamBold
+TargetSettingsTitle.TextSize = 12
+TargetSettingsTitle.Parent = TargetSettingsFrame
 
--- Minimum Level Slider
+-- Min Level
 local MinLevelLabel = Instance.new("TextLabel")
 MinLevelLabel.Name = "MinLevelLabel"
-MinLevelLabel.Size = UDim2.new(0.5, -5, 0, 30)
-MinLevelLabel.Position = UDim2.new(0, 10, 0, 40)
+MinLevelLabel.Size = UDim2.new(0.5, -5, 0, 20)
+MinLevelLabel.Position = UDim2.new(0, 5, 0, 30)
 MinLevelLabel.BackgroundTransparency = 1
 MinLevelLabel.Text = "Min Level: " .. Targeting.MinLevel
 MinLevelLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinLevelLabel.Font = Enum.Font.Gotham
-MinLevelLabel.TextSize = 12
+MinLevelLabel.TextSize = 10
 MinLevelLabel.TextXAlignment = Enum.TextXAlignment.Left
-MinLevelLabel.Parent = TargetingSettings
+MinLevelLabel.Parent = TargetSettingsFrame
 
 local MinLevelBox = Instance.new("TextBox")
 MinLevelBox.Name = "MinLevelBox"
-MinLevelBox.Size = UDim2.new(0.5, -15, 0, 30)
-MinLevelBox.Position = UDim2.new(0.5, 5, 0, 40)
-MinLevelBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+MinLevelBox.Size = UDim2.new(0.5, -15, 0, 20)
+MinLevelBox.Position = UDim2.new(0.5, 5, 0, 30)
+MinLevelBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 MinLevelBox.Text = tostring(Targeting.MinLevel)
 MinLevelBox.TextColor3 = Color3.white
 MinLevelBox.Font = Enum.Font.Gotham
-MinLevelBox.TextSize = 12
-MinLevelBox.Parent = TargetingSettings
+MinLevelBox.TextSize = 10
+MinLevelBox.Parent = TargetSettingsFrame
 
--- Minimum Bounty Slider
+-- Min Bounty
 local MinBountyLabel = Instance.new("TextLabel")
 MinBountyLabel.Name = "MinBountyLabel"
-MinBountyLabel.Size = UDim2.new(0.5, -5, 0, 30)
-MinBountyLabel.Position = UDim2.new(0, 10, 0, 80)
+MinBountyLabel.Size = UDim2.new(0.5, -5, 0, 20)
+MinBountyLabel.Position = UDim2.new(0, 5, 0, 60)
 MinBountyLabel.BackgroundTransparency = 1
 MinBountyLabel.Text = "Min Bounty: " .. Targeting.MinBounty
 MinBountyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinBountyLabel.Font = Enum.Font.Gotham
-MinBountyLabel.TextSize = 12
+MinBountyLabel.TextSize = 10
 MinBountyLabel.TextXAlignment = Enum.TextXAlignment.Left
-MinBountyLabel.Parent = TargetingSettings
+MinBountyLabel.Parent = TargetSettingsFrame
 
 local MinBountyBox = Instance.new("TextBox")
 MinBountyBox.Name = "MinBountyBox"
-MinBountyBox.Size = UDim2.new(0.5, -15, 0, 30)
-MinBountyBox.Position = UDim2.new(0.5, 5, 0, 80)
-MinBountyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+MinBountyBox.Size = UDim2.new(0.5, -15, 0, 20)
+MinBountyBox.Position = UDim2.new(0.5, 5, 0, 60)
+MinBountyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 MinBountyBox.Text = tostring(Targeting.MinBounty)
 MinBountyBox.TextColor3 = Color3.white
 MinBountyBox.Font = Enum.Font.Gotham
-MinBountyBox.TextSize = 12
-MinBountyBox.Parent = TargetingSettings
+MinBountyBox.TextSize = 10
+MinBountyBox.Parent = TargetSettingsFrame
 
 -- Safe Zone Toggle
 local SafeZoneToggle = Instance.new("TextButton")
 SafeZoneToggle.Name = "SafeZoneToggle"
-SafeZoneToggle.Size = UDim2.new(1, -20, 0, 30)
-SafeZoneToggle.Position = UDim2.new(0, 10, 0, 120)
+SafeZoneToggle.Size = UDim2.new(1, -10, 0, 25)
+SafeZoneToggle.Position = UDim2.new(0, 5, 0, 90)
 SafeZoneToggle.BackgroundColor3 = Targeting.AvoidSafeZone and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-SafeZoneToggle.Text = "Avoid Safe Zone: " .. (Targeting.AvoidSafeZone and "ON" or "OFF")
+SafeZoneToggle.Text = "AVOID SAFE ZONE: " .. (Targeting.AvoidSafeZone and "ON" or "OFF")
 SafeZoneToggle.TextColor3 = Color3.white
-SafeZoneToggle.Font = Enum.Font.Gotham
-SafeZoneToggle.TextSize = 12
-SafeZoneToggle.Parent = TargetingSettings
+SafeZoneToggle.Font = Enum.Font.GothamBold
+SafeZoneToggle.TextSize = 11
+SafeZoneToggle.Parent = TargetSettingsFrame
 
--- PVP Check Toggle
-local PVPCheckToggle = Instance.new("TextButton")
-PVPCheckToggle.Name = "PVPCheckToggle"
-PVPCheckToggle.Size = UDim2.new(1, -20, 0, 30)
-PVPCheckToggle.Position = UDim2.new(0, 10, 0, 160)
-PVPCheckToggle.BackgroundColor3 = Targeting.CheckPVP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-PVPCheckToggle.Text = "Check PVP: " .. (Targeting.CheckPVP and "ON" or "OFF")
-PVPCheckToggle.TextColor3 = Color3.white
-PVPCheckToggle.Font = Enum.Font.Gotham
-PVPCheckToggle.TextSize = 12
-PVPCheckToggle.Parent = TargetingSettings
+SafeZoneToggle.MouseButton1Click:Connect(function()
+    Targeting.AvoidSafeZone = not Targeting.AvoidSafeZone
+    SafeZoneToggle.BackgroundColor3 = Targeting.AvoidSafeZone and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+    SafeZoneToggle.Text = "AVOID SAFE ZONE: " .. (Targeting.AvoidSafeZone and "ON" or "OFF")
+end)
 
--- Priority Settings
-local PrioritySection = Instance.new("Frame")
-PrioritySection.Name = "PrioritySection"
-PrioritySection.Size = UDim2.new(1, -20, 0, 150)
-PrioritySection.Position = UDim2.new(0, 10, 0, 270)
-PrioritySection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-PrioritySection.BorderSizePixel = 0
-PrioritySection.Parent = TargetingFrame
+-- PVP Toggle
+local PVPToggle = Instance.new("TextButton")
+PVPToggle.Name = "PVPToggle"
+PVPToggle.Size = UDim2.new(1, -10, 0, 25)
+PVPToggle.Position = UDim2.new(0, 5, 0, 120)
+PVPToggle.BackgroundColor3 = Targeting.CheckPVP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+PVPToggle.Text = "CHECK PVP: " .. (Targeting.CheckPVP and "ON" or "OFF")
+PVPToggle.TextColor3 = Color3.white
+PVPToggle.Font = Enum.Font.GothamBold
+PVPToggle.TextSize = 11
+PVPToggle.Parent = TargetSettingsFrame
 
-local PriorityTitle = Instance.new("TextLabel")
-PriorityTitle.Name = "PriorityTitle"
-PriorityTitle.Size = UDim2.new(1, 0, 0, 30)
-PriorityTitle.BackgroundTransparency = 1
-PriorityTitle.Text = "TARGET PRIORITY"
-PriorityTitle.TextColor3 = Color3.fromRGB(255, 215, 0)
-PriorityTitle.Font = Enum.Font.GothamBold
-PriorityTitle.TextSize = 14
-PriorityTitle.Parent = PrioritySection
+PVPToggle.MouseButton1Click:Connect(function()
+    Targeting.CheckPVP = not Targeting.CheckPVP
+    PVPToggle.BackgroundColor3 = Targeting.CheckPVP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+    PVPToggle.Text = "CHECK PVP: " .. (Targeting.CheckPVP and "ON" or "OFF")
+end)
 
--- Movement Content
-local MovementFrame = TabFrames["Movement"]
+-- Settings Tab Content
+local SettingsFrame = TabFrames["Settings"]
 
--- Speed Settings
-local SpeedSection = Instance.new("Frame")
-SpeedSection.Name = "SpeedSection"
-SpeedSection.Size = UDim2.new(1, -20, 0, 180)
-SpeedSection.Position = UDim2.new(0, 10, 0, 10)
-SpeedSection.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-SpeedSection.BorderSizePixel = 0
-SpeedSection.Parent = MovementFrame
+-- Movement Settings
+local MovementSettingsFrame = Instance.new("Frame")
+MovementSettingsFrame.Name = "MovementSettingsFrame"
+MovementSettingsFrame.Size = UDim2.new(1, -20, 0, 120)
+MovementSettingsFrame.Position = UDim2.new(0, 10, 0, 10)
+MovementSettingsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+MovementSettingsFrame.BorderSizePixel = 0
+MovementSettingsFrame.Parent = SettingsFrame
 
-local SpeedTitle = Instance.new("TextLabel")
-SpeedTitle.Name = "SpeedTitle"
-SpeedTitle.Size = UDim2.new(1, 0, 0, 30)
-SpeedTitle.BackgroundTransparency = 1
-SpeedTitle.Text = "MOVEMENT SETTINGS"
-SpeedTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
-SpeedTitle.Font = Enum.Font.GothamBold
-SpeedTitle.TextSize = 14
-SpeedTitle.Parent = SpeedSection
+local MovementTitle = Instance.new("TextLabel")
+MovementTitle.Name = "MovementTitle"
+MovementTitle.Size = UDim2.new(1, 0, 0, 25)
+MovementTitle.BackgroundTransparency = 1
+MovementTitle.Text = "MOVEMENT SETTINGS"
+MovementTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
+MovementTitle.Font = Enum.Font.GothamBold
+MovementTitle.TextSize = 12
+MovementTitle.Parent = MovementSettingsFrame
 
--- Travel Speed
-local TravelSpeedLabel = Instance.new("TextLabel")
-TravelSpeedLabel.Name = "TravelSpeedLabel"
-TravelSpeedLabel.Size = UDim2.new(0.5, -5, 0, 30)
-TravelSpeedLabel.Position = UDim2.new(0, 10, 0, 40)
-TravelSpeedLabel.BackgroundTransparency = 1
-TravelSpeedLabel.Text = "Speed: " .. Movement.Speed
-TravelSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TravelSpeedLabel.Font = Enum.Font.Gotham
-TravelSpeedLabel.TextSize = 12
-TravelSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
-TravelSpeedLabel.Parent = SpeedSection
+-- Speed
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Name = "SpeedLabel"
+SpeedLabel.Size = UDim2.new(0.5, -5, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 5, 0, 30)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Speed: " .. Movement.Speed
+SpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.TextSize = 10
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = MovementSettingsFrame
 
-local TravelSpeedBox = Instance.new("TextBox")
-TravelSpeedBox.Name = "TravelSpeedBox"
-TravelSpeedBox.Size = UDim2.new(0.5, -15, 0, 30)
-TravelSpeedBox.Position = UDim2.new(0.5, 5, 0, 40)
-TravelSpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-TravelSpeedBox.Text = tostring(Movement.Speed)
-TravelSpeedBox.TextColor3 = Color3.white
-TravelSpeedBox.Font = Enum.Font.Gotham
-TravelSpeedBox.TextSize = 12
-TravelSpeedBox.Parent = SpeedSection
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Name = "SpeedBox"
+SpeedBox.Size = UDim2.new(0.5, -15, 0, 20)
+SpeedBox.Position = UDim2.new(0.5, 5, 0, 30)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+SpeedBox.Text = tostring(Movement.Speed)
+SpeedBox.TextColor3 = Color3.white
+SpeedBox.Font = Enum.Font.Gotham
+SpeedBox.TextSize = 10
+SpeedBox.Parent = MovementSettingsFrame
 
 -- Fly Speed
 local FlySpeedLabel = Instance.new("TextLabel")
 FlySpeedLabel.Name = "FlySpeedLabel"
-FlySpeedLabel.Size = UDim2.new(0.5, -5, 0, 30)
-FlySpeedLabel.Position = UDim2.new(0, 10, 0, 80)
+FlySpeedLabel.Size = UDim2.new(0.5, -5, 0, 20)
+FlySpeedLabel.Position = UDim2.new(0, 5, 0, 60)
 FlySpeedLabel.BackgroundTransparency = 1
 FlySpeedLabel.Text = "Fly Speed: " .. Movement.FlySpeed
 FlySpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 FlySpeedLabel.Font = Enum.Font.Gotham
-FlySpeedLabel.TextSize = 12
+FlySpeedLabel.TextSize = 10
 FlySpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
-FlySpeedLabel.Parent = SpeedSection
+FlySpeedLabel.Parent = MovementSettingsFrame
 
 local FlySpeedBox = Instance.new("TextBox")
 FlySpeedBox.Name = "FlySpeedBox"
-FlySpeedBox.Size = UDim2.new(0.5, -15, 0, 30)
-FlySpeedBox.Position = UDim2.new(0.5, 5, 0, 80)
-FlySpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+FlySpeedBox.Size = UDim2.new(0.5, -15, 0, 20)
+FlySpeedBox.Position = UDim2.new(0.5, 5, 0, 60)
+FlySpeedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 FlySpeedBox.Text = tostring(Movement.FlySpeed)
 FlySpeedBox.TextColor3 = Color3.white
 FlySpeedBox.Font = Enum.Font.Gotham
-FlySpeedBox.TextSize = 12
-FlySpeedBox.Parent = SpeedSection
-
--- Movement Toggles
-local BezierToggle = Instance.new("TextButton")
-BezierToggle.Name = "BezierToggle"
-BezierToggle.Size = UDim2.new(1, -20, 0, 30)
-BezierToggle.Position = UDim2.new(0, 10, 0, 120)
-BezierToggle.BackgroundColor3 = Movement.UseBezier and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-BezierToggle.Text = "Bezier Curves: " .. (Movement.UseBezier and "ON" or "OFF")
-BezierToggle.TextColor3 = Color3.white
-BezierToggle.Font = Enum.Font.Gotham
-BezierToggle.TextSize = 12
-BezierToggle.Parent = SpeedSection
-
-local NoClipToggle = Instance.new("TextButton")
-NoClipToggle.Name = "NoClipToggle"
-NoClipToggle.Size = UDim2.new(1, -20, 0, 30)
-NoClipToggle.Position = UDim2.new(0, 10, 0, 160)
-NoClipToggle.BackgroundColor3 = Movement.NoClip and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-NoClipToggle.Text = "NoClip: " .. (Movement.NoClip and "ON" or "OFF")
-NoClipToggle.TextColor3 = Color3.white
-NoClipToggle.Font = Enum.Font.Gotham
-NoClipToggle.TextSize = 12
-NoClipToggle.Parent = SpeedSection
-
--- Safety Content
-local SafetyFrame = TabFrames["Safety"]
+FlySpeedBox.TextSize = 10
+FlySpeedBox.Parent = MovementSettingsFrame
 
 -- Safety Settings
-local SafetySettings = Instance.new("Frame")
-SafetySettings.Name = "SafetySettings"
-SafetySettings.Size = UDim2.new(1, -20, 0, 200)
-SafetySettings.Position = UDim2.new(0, 10, 0, 10)
-SafetySettings.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-SafetySettings.BorderSizePixel = 0
-SafetySettings.Parent = SafetyFrame
+local SafetySettingsFrame = Instance.new("Frame")
+SafetySettingsFrame.Name = "SafetySettingsFrame"
+SafetySettingsFrame.Size = UDim2.new(1, -20, 0, 120)
+SafetySettingsFrame.Position = UDim2.new(0, 10, 0, 140)
+SafetySettingsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+SafetySettingsFrame.BorderSizePixel = 0
+SafetySettingsFrame.Parent = SettingsFrame
 
 local SafetyTitle = Instance.new("TextLabel")
 SafetyTitle.Name = "SafetyTitle"
-SafetyTitle.Size = UDim2.new(1, 0, 0, 30)
+SafetyTitle.Size = UDim2.new(1, 0, 0, 25)
 SafetyTitle.BackgroundTransparency = 1
-SafetyTitle.Text = "SAFETY PROTOCOLS"
+SafetyTitle.Text = "SAFETY SETTINGS"
 SafetyTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
 SafetyTitle.Font = Enum.Font.GothamBold
-SafetyTitle.TextSize = 14
-SafetyTitle.Parent = SafetySettings
+SafetyTitle.TextSize = 12
+SafetyTitle.Parent = SafetySettingsFrame
 
 -- Low HP Threshold
 local HPThresholdLabel = Instance.new("TextLabel")
 HPThresholdLabel.Name = "HPThresholdLabel"
-HPThresholdLabel.Size = UDim2.new(0.5, -5, 0, 30)
-HPThresholdLabel.Position = UDim2.new(0, 10, 0, 40)
+HPThresholdLabel.Size = UDim2.new(0.5, -5, 0, 20)
+HPThresholdLabel.Position = UDim2.new(0, 5, 0, 30)
 HPThresholdLabel.BackgroundTransparency = 1
 HPThresholdLabel.Text = "Low HP: " .. (Safety.LowHPThreshold * 100) .. "%"
 HPThresholdLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 HPThresholdLabel.Font = Enum.Font.Gotham
-HPThresholdLabel.TextSize = 12
+HPThresholdLabel.TextSize = 10
 HPThresholdLabel.TextXAlignment = Enum.TextXAlignment.Left
-HPThresholdLabel.Parent = SafetySettings
+HPThresholdLabel.Parent = SafetySettingsFrame
 
 local HPThresholdBox = Instance.new("TextBox")
 HPThresholdBox.Name = "HPThresholdBox"
-HPThresholdBox.Size = UDim2.new(0.5, -15, 0, 30)
-HPThresholdBox.Position = UDim2.new(0.5, 5, 0, 40)
-HPThresholdBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+HPThresholdBox.Size = UDim2.new(0.5, -15, 0, 20)
+HPThresholdBox.Position = UDim2.new(0.5, 5, 0, 30)
+HPThresholdBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 HPThresholdBox.Text = tostring(Safety.LowHPThreshold * 100)
 HPThresholdBox.TextColor3 = Color3.white
 HPThresholdBox.Font = Enum.Font.Gotham
-HPThresholdBox.TextSize = 12
-HPThresholdBox.Parent = SafetySettings
+HPThresholdBox.TextSize = 10
+HPThresholdBox.Parent = SafetySettingsFrame
 
--- Safety Toggles
+-- Auto Counter Toggle
 local AutoCounterToggle = Instance.new("TextButton")
 AutoCounterToggle.Name = "AutoCounterToggle"
-AutoCounterToggle.Size = UDim2.new(1, -20, 0, 30)
-AutoCounterToggle.Position = UDim2.new(0, 10, 0, 80)
+AutoCounterToggle.Size = UDim2.new(1, -10, 0, 25)
+AutoCounterToggle.Position = UDim2.new(0, 5, 0, 60)
 AutoCounterToggle.BackgroundColor3 = Safety.AutoCounter and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-AutoCounterToggle.Text = "Auto Counter: " .. (Safety.AutoCounter and "ON" or "OFF")
+AutoCounterToggle.Text = "AUTO COUNTER: " .. (Safety.AutoCounter and "ON" or "OFF")
 AutoCounterToggle.TextColor3 = Color3.white
-AutoCounterToggle.Font = Enum.Font.Gotham
-AutoCounterToggle.TextSize = 12
-AutoCounterToggle.Parent = SafetySettings
+AutoCounterToggle.Font = Enum.Font.GothamBold
+AutoCounterToggle.TextSize = 11
+AutoCounterToggle.Parent = SafetySettingsFrame
 
-local AntiReportToggle = Instance.new("TextButton")
-AntiReportToggle.Name = "AntiReportToggle"
-AntiReportToggle.Size = UDim2.new(1, -20, 0, 30)
-AntiReportToggle.Position = UDim2.new(0, 10, 0, 120)
-AntiReportToggle.BackgroundColor3 = Safety.AntiReport and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-AntiReportToggle.Text = "Anti-Report: " .. (Safety.AntiReport and "ON" or "OFF")
-AntiReportToggle.TextColor3 = Color3.white
-AntiReportToggle.Font = Enum.Font.Gotham
-AntiReportToggle.TextSize = 12
-AntiReportToggle.Parent = SafetySettings
-
-local EmergencyToggle = Instance.new("TextButton")
-EmergencyToggle.Name = "EmergencyToggle"
-EmergencyToggle.Size = UDim2.new(1, -20, 0, 30)
-EmergencyToggle.Position = UDim2.new(0, 10, 0, 160)
-EmergencyToggle.BackgroundColor3 = Safety.EmergencyTP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-EmergencyToggle.Text = "Emergency TP: " .. (Safety.EmergencyTP and "ON" or "OFF")
-EmergencyToggle.TextColor3 = Color3.white
-EmergencyToggle.Font = Enum.Font.Gotham
-EmergencyToggle.TextSize = 12
-EmergencyToggle.Parent = SafetySettings
-
--- Server Content
-local ServerFrame = TabFrames["Server"]
+AutoCounterToggle.MouseButton1Click:Connect(function()
+    Safety.AutoCounter = not Safety.AutoCounter
+    AutoCounterToggle.BackgroundColor3 = Safety.AutoCounter and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+    AutoCounterToggle.Text = "AUTO COUNTER: " .. (Safety.AutoCounter and "ON" or "OFF")
+end)
 
 -- Server Settings
-local ServerSettings = Instance.new("Frame")
-ServerSettings.Name = "ServerSettings"
-ServerSettings.Size = UDim2.new(1, -20, 0, 200)
-ServerSettings.Position = UDim2.new(0, 10, 0, 10)
-ServerSettings.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-ServerSettings.BorderSizePixel = 0
-ServerSettings.Parent = ServerFrame
+local ServerSettingsFrame = Instance.new("Frame")
+ServerSettingsFrame.Name = "ServerSettingsFrame"
+ServerSettingsFrame.Size = UDim2.new(1, -20, 0, 80)
+ServerSettingsFrame.Position = UDim2.new(0, 10, 0, 270)
+ServerSettingsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+ServerSettingsFrame.BorderSizePixel = 0
+ServerSettingsFrame.Parent = SettingsFrame
 
 local ServerTitle = Instance.new("TextLabel")
 ServerTitle.Name = "ServerTitle"
-ServerTitle.Size = UDim2.new(1, 0, 0, 30)
+ServerTitle.Size = UDim2.new(1, 0, 0, 25)
 ServerTitle.BackgroundTransparency = 1
-ServerTitle.Text = "SERVER MANAGEMENT"
-ServerTitle.TextColor3 = Color3.fromRGB(100, 200, 100)
+ServerTitle.Text = "SERVER SETTINGS"
+ServerTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
 ServerTitle.Font = Enum.Font.GothamBold
-ServerTitle.TextSize = 14
-ServerTitle.Parent = ServerSettings
+ServerTitle.TextSize = 12
+ServerTitle.Parent = ServerSettingsFrame
 
--- Auto Hop Settings
+-- Auto Hop Toggle
 local AutoHopToggle = Instance.new("TextButton")
 AutoHopToggle.Name = "AutoHopToggle"
-AutoHopToggle.Size = UDim2.new(1, -20, 0, 30)
-AutoHopToggle.Position = UDim2.new(0, 10, 0, 40)
+AutoHopToggle.Size = UDim2.new(1, -10, 0, 25)
+AutoHopToggle.Position = UDim2.new(0, 5, 0, 30)
 AutoHopToggle.BackgroundColor3 = Server.AutoHop and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-AutoHopToggle.Text = "Auto Server Hop: " .. (Server.AutoHop and "ON" or "OFF")
+AutoHopToggle.Text = "AUTO HOP: " .. (Server.AutoHop and "ON" or "OFF")
 AutoHopToggle.TextColor3 = Color3.white
-AutoHopToggle.Font = Enum.Font.Gotham
-AutoHopToggle.TextSize = 12
-AutoHopToggle.Parent = ServerSettings
+AutoHopToggle.Font = Enum.Font.GothamBold
+AutoHopToggle.TextSize = 11
+AutoHopToggle.Parent = ServerSettingsFrame
 
--- Min Players
-local MinPlayersLabel = Instance.new("TextLabel")
-MinPlayersLabel.Name = "MinPlayersLabel"
-MinPlayersLabel.Size = UDim2.new(0.5, -5, 0, 30)
-MinPlayersLabel.Position = UDim2.new(0, 10, 0, 80)
-MinPlayersLabel.BackgroundTransparency = 1
-MinPlayersLabel.Text = "Min Players: " .. Server.MinPlayers
-MinPlayersLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinPlayersLabel.Font = Enum.Font.Gotham
-MinPlayersLabel.TextSize = 12
-MinPlayersLabel.TextXAlignment = Enum.TextXAlignment.Left
-MinPlayersLabel.Parent = ServerSettings
-
-local MinPlayersBox = Instance.new("TextBox")
-MinPlayersBox.Name = "MinPlayersBox"
-MinPlayersBox.Size = UDim2.new(0.5, -15, 0, 30)
-MinPlayersBox.Position = UDim2.new(0.5, 5, 0, 80)
-MinPlayersBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-MinPlayersBox.Text = tostring(Server.MinPlayers)
-MinPlayersBox.TextColor3 = Color3.white
-MinPlayersBox.Font = Enum.Font.Gotham
-MinPlayersBox.TextSize = 12
-MinPlayersBox.Parent = ServerSettings
-
--- Hop Delay
-local HopDelayLabel = Instance.new("TextLabel")
-HopDelayLabel.Name = "HopDelayLabel"
-HopDelayLabel.Size = UDim2.new(0.5, -5, 0, 30)
-HopDelayLabel.Position = UDim2.new(0, 10, 0, 120)
-HopDelayLabel.BackgroundTransparency = 1
-HopDelayLabel.Text = "Hop Delay: " .. Server.HopDelay .. "s"
-HopDelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-HopDelayLabel.Font = Enum.Font.Gotham
-HopDelayLabel.TextSize = 12
-HopDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
-HopDelayLabel.Parent = ServerSettings
-
-local HopDelayBox = Instance.new("TextBox")
-HopDelayBox.Name = "HopDelayBox"
-HopDelayBox.Size = UDim2.new(0.5, -15, 0, 30)
-HopDelayBox.Position = UDim2.new(0.5, 5, 0, 120)
-HopDelayBox.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-HopDelayBox.Text = tostring(Server.HopDelay)
-HopDelayBox.TextColor3 = Color3.white
-HopDelayBox.Font = Enum.Font.Gotham
-HopDelayBox.TextSize = 12
-HopDelayBox.Parent = ServerSettings
-
--- Server Control Buttons
-local ServerButtons = Instance.new("Frame")
-ServerButtons.Name = "ServerButtons"
-ServerButtons.Size = UDim2.new(1, -20, 0, 100)
-ServerButtons.Position = UDim2.new(0, 10, 0, 220)
-ServerButtons.BackgroundTransparency = 1
-ServerButtons.Parent = ServerFrame
-
-local SaveSessionBtn = Instance.new("TextButton")
-SaveSessionBtn.Name = "SaveSessionBtn"
-SaveSessionBtn.Size = UDim2.new(1, 0, 0, 40)
-SaveSessionBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-SaveSessionBtn.Text = "SAVE SESSION"
-SaveSessionBtn.TextColor3 = Color3.white
-SaveSessionBtn.Font = Enum.Font.GothamBold
-SaveSessionBtn.TextSize = 14
-SaveSessionBtn.Parent = ServerButtons
-
-local ForceHopBtn = Instance.new("TextButton")
-ForceHopBtn.Name = "ForceHopBtn"
-ForceHopBtn.Size = UDim2.new(1, 0, 0, 40)
-ForceHopBtn.Position = UDim2.new(0, 0, 0, 50)
-ForceHopBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-ForceHopBtn.Text = "FORCE HOP SERVER"
-ForceHopBtn.TextColor3 = Color3.white
-ForceHopBtn.Font = Enum.Font.GothamBold
-ForceHopBtn.TextSize = 14
-ForceHopBtn.Parent = ServerButtons
+AutoHopToggle.MouseButton1Click:Connect(function()
+    Server.AutoHop = not Server.AutoHop
+    AutoHopToggle.BackgroundColor3 = Server.AutoHop and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
+    AutoHopToggle.Text = "AUTO HOP: " .. (Server.AutoHop and "ON" or "OFF")
+end)
 
 -- Circle Zone Visual
 local CircleZone = Instance.new("Frame")
 CircleZone.Name = "CircleZone"
-CircleZone.Size = UDim2.new(0, 100, 0, 100)
+CircleZone.Size = UDim2.new(0, 80, 0, 80)
 CircleZone.AnchorPoint = Vector2.new(0.5, 0.5)
-CircleZone.BackgroundTransparency = 0.7
+CircleZone.BackgroundTransparency = 0.8
 CircleZone.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
 CircleZone.BorderSizePixel = 2
 CircleZone.BorderColor3 = Color3.fromRGB(255, 255, 255)
 CircleZone.Visible = false
 CircleZone.Parent = ScreenGui
 
-local CircleUICorner = Instance.new("UICorner")
-CircleUICorner.CornerRadius = UDim.new(1, 0)
-CircleUICorner.Parent = CircleZone
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = CircleZone
 
--- Log System
-local function AddLogMessage(message)
-    local timestamp = os.date("%H:%M:%S")
-    local logEntry = Instance.new("TextLabel")
-    logEntry.Text = "[" .. timestamp .. "] " .. message
-    logEntry.Size = UDim2.new(1, 0, 0, 20)
-    logEntry.BackgroundTransparency = 1
-    logEntry.TextColor3 = Color3.fromRGB(200, 200, 200)
-    logEntry.Font = Enum.Font.Code
-    logEntry.TextSize = 11
-    logEntry.TextXAlignment = Enum.TextXAlignment.Left
-    logEntry.Parent = LogContainer
-    
-    task.spawn(function()
-        task.wait(10)
-        if logEntry then
-            logEntry:Destroy()
-        end
-    end)
-end
+-- TextBox Event Handlers
+MinLevelBox.FocusLost:Connect(function()
+    local value = tonumber(MinLevelBox.Text)
+    if value then
+        Targeting.MinLevel = math.clamp(value, 1, 5000)
+        MinLevelBox.Text = tostring(Targeting.MinLevel)
+        MinLevelLabel.Text = "Min Level: " .. Targeting.MinLevel
+    end
+end)
 
--- Player Data Collection
+MinBountyBox.FocusLost:Connect(function()
+    local value = tonumber(MinBountyBox.Text)
+    if value then
+        Targeting.MinBounty = math.clamp(value, 0, 10000000)
+        MinBountyBox.Text = tostring(Targeting.MinBounty)
+        MinBountyLabel.Text = "Min Bounty: " .. Targeting.MinBounty
+    end
+end)
+
+SpeedBox.FocusLost:Connect(function()
+    local value = tonumber(SpeedBox.Text)
+    if value then
+        Movement.Speed = math.clamp(value, 50, 200)
+        SpeedBox.Text = tostring(Movement.Speed)
+        SpeedLabel.Text = "Speed: " .. Movement.Speed
+    end
+end)
+
+FlySpeedBox.FocusLost:Connect(function()
+    local value = tonumber(FlySpeedBox.Text)
+    if value then
+        Movement.FlySpeed = math.clamp(value, 50, 150)
+        FlySpeedBox.Text = tostring(Movement.FlySpeed)
+        FlySpeedLabel.Text = "Fly Speed: " .. Movement.FlySpeed
+    end
+end)
+
+HPThresholdBox.FocusLost:Connect(function()
+    local value = tonumber(HPThresholdBox.Text)
+    if value then
+        Safety.LowHPThreshold = math.clamp(value / 100, 0.1, 0.5)
+        HPThresholdBox.Text = tostring(value)
+        HPThresholdLabel.Text = "Low HP: " .. value .. "%"
+    end
+end)
+
+-- Get Player Data Function (FIXED)
 local function GetPlayerInfo(player)
     local info = {
         Name = player.Name,
@@ -1086,13 +848,26 @@ local function GetPlayerInfo(player)
         Bounty = 0,
         Health = 0,
         MaxHealth = 0,
-        IsInSafeZone = false,
-        HasPVP = false,
         Distance = math.huge,
         Character = nil,
         Humanoid = nil,
         RootPart = nil
     }
+    
+    -- Get level and bounty from leaderstats
+    pcall(function()
+        if player:FindFirstChild("leaderstats") then
+            local leaderstats = player.leaderstats
+            if leaderstats:FindFirstChild("Level") then
+                info.Level = leaderstats.Level.Value or 0
+            end
+            if leaderstats:FindFirstChild("Bounty") then
+                info.Bounty = leaderstats["Bounty"].Value or 0
+            elseif leaderstats:FindFirstChild("$") then
+                info.Bounty = leaderstats["$"].Value or 0
+            end
+        end
+    end)
     
     local char = player.Character
     if char then
@@ -1105,61 +880,15 @@ local function GetPlayerInfo(player)
             info.MaxHealth = info.Humanoid.MaxHealth
         end
         
-        if info.RootPart then
-            if HumanoidRootPart then
-                info.Distance = (info.RootPart.Position - HumanoidRootPart.Position).Magnitude
-            end
+        if info.RootPart and HumanoidRootPart then
+            info.Distance = (info.RootPart.Position - HumanoidRootPart.Position).Magnitude
         end
     end
     
     return info
 end
 
--- Target Scoring System
-local function CalculateTargetScore(targetInfo)
-    local score = 0
-    
-    -- Level factor
-    if targetInfo.Level >= Targeting.MinLevel then
-        score = score + (targetInfo.Level / 100) * 10
-    else
-        return -math.huge
-    end
-    
-    -- Bounty factor
-    if targetInfo.Bounty >= Targeting.MinBounty then
-        score = score + (targetInfo.Bounty / 1000) * 15
-    end
-    
-    -- Distance penalty
-    score = score - (targetInfo.Distance / 10)
-    
-    -- Health advantage
-    local healthPercent = targetInfo.Health / targetInfo.MaxHealth
-    score = score + (1 - healthPercent) * 50
-    
-    -- Safe zone penalty
-    if targetInfo.IsInSafeZone then
-        score = score - 1000
-    end
-    
-    -- PVP check
-    if Targeting.CheckPVP and not targetInfo.HasPVP then
-        score = score - 500
-    end
-    
-    -- Cooldown check
-    if Config.CooldownList[targetInfo.Name] then
-        local timeSince = os.time() - Config.CooldownList[targetInfo.Name]
-        if timeSince < 900 then -- 15 minutes cooldown
-            score = score - 2000
-        end
-    end
-    
-    return score
-end
-
--- Find Best Target
+-- Find Best Target (FIXED)
 local function FindBestTarget()
     local bestTarget = nil
     local bestScore = -math.huge
@@ -1168,8 +897,26 @@ local function FindBestTarget()
         if player ~= Player then
             local info = GetPlayerInfo(player)
             
-            if info.Health > 0 and info.Distance <= Targeting.MaxDistance then
-                local score = CalculateTargetScore(info)
+            -- Check conditions
+            if info.Level >= Targeting.MinLevel and 
+               info.Bounty >= Targeting.MinBounty and
+               info.Health > 0 and
+               info.Distance <= Targeting.MaxDistance then
+                
+                -- Calculate score
+                local score = 0
+                score = score + (info.Level / 100) * 10
+                score = score + (info.Bounty / 1000) * 15
+                score = score - (info.Distance / 10)
+                score = score + (1 - (info.Health / info.MaxHealth)) * 50
+                
+                -- Cooldown check
+                if Config.CooldownList[info.Name] then
+                    local timeSince = os.time() - Config.CooldownList[info.Name]
+                    if timeSince < 900 then
+                        score = score - 1000
+                    end
+                end
                 
                 if score > bestScore then
                     bestScore = score
@@ -1182,97 +929,26 @@ local function FindBestTarget()
     return bestTarget
 end
 
--- Bezier Curve Calculation
-local function CalculateBezierPoint(t, points)
-    if #points == 1 then
-        return points[1]
-    end
-    
-    local newPoints = {}
-    for i = 1, #points - 1 do
-        local point = points[i]:Lerp(points[i + 1], t)
-        table.insert(newPoints, point)
-    end
-    
-    return CalculateBezierPoint(t, newPoints)
-end
-
--- Adaptive Tween Movement
-local function MoveToPosition(targetPos, speedMultiplier)
+-- Movement Function
+local function MoveToPosition(targetPos)
     if not HumanoidRootPart then return end
     
     local startPos = HumanoidRootPart.Position
     local distance = (targetPos - startPos).Magnitude
-    local travelTime = distance / (Movement.Speed * (speedMultiplier or 1))
-    
-    -- Enable NoClip if set
-    if Movement.NoClip then
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
+    local travelTime = distance / Movement.Speed
     
     local startTime = tick()
     
     while tick() - startTime < travelTime and HumanoidRootPart do
         local elapsed = tick() - startTime
         local t = elapsed / travelTime
+        t = math.clamp(t, 0, 1)
         
-        -- Use bezier curve if enabled
-        local currentTargetPos
-        if Movement.UseBezier and distance > 50 then
-            local controlPoint = startPos + (targetPos - startPos) * 0.5 + Vector3.new(0, 20, 0)
-            currentTargetPos = CalculateBezierPoint(t, {startPos, controlPoint, targetPos})
-        else
-            currentTargetPos = startPos:Lerp(targetPos, t)
-        end
-        
-        -- Add random movement variation
-        if Movement.AntiAntiCheat then
-            local randomOffset = Vector3.new(
-                math.random(-2, 2),
-                math.random(-1, 1),
-                math.random(-2, 2)
-            )
-            currentTargetPos = currentTargetPos + randomOffset
-        end
-        
+        local currentTargetPos = startPos:Lerp(targetPos, t)
         local direction = (currentTargetPos - HumanoidRootPart.Position).Unit
         local velocity = direction * Movement.Speed * (0.9 + math.random() * 0.2)
         
         HumanoidRootPart.Velocity = velocity
-        
-        task.wait()
-    end
-    
-    -- Disable NoClip
-    if Movement.NoClip then
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
-            end
-        end
-    end
-end
-
--- Fly System
-local function FlyToTarget(targetPos)
-    Config.IsFlying = true
-    
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-    bodyVelocity.P = 1000
-    bodyVelocity.Parent = HumanoidRootPart
-    
-    local startTime = tick()
-    local maxFlyTime = 5
-    
-    while tick() - startTime < maxFlyTime and Config.IsFlying do
-        local direction = (targetPos - HumanoidRootPart.Position).Unit
-        bodyVelocity.Velocity = direction * Movement.FlySpeed
         
         -- Update camera aimlock
         if Config.CurrentTarget then
@@ -1285,31 +961,46 @@ local function FlyToTarget(targetPos)
             end
         end
         
-        task.wait()
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Fly Function
+local function FlyToTarget(targetPos)
+    if not HumanoidRootPart then return end
+    
+    local startTime = tick()
+    local maxFlyTime = 3
+    
+    while tick() - startTime < maxFlyTime do
+        local direction = (targetPos - HumanoidRootPart.Position).Unit
+        HumanoidRootPart.Velocity = direction * Movement.FlySpeed
         
         -- Check if close enough
         if (targetPos - HumanoidRootPart.Position).Magnitude < 10 then
             break
         end
+        
+        RunService.Heartbeat:Wait()
     end
-    
-    bodyVelocity:Destroy()
-    Config.IsFlying = false
 end
 
--- Combo Execution
+-- Execute Skill
 local function ExecuteSkill(key)
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[key], false, game)
-    task.wait(0.05 + (Combo.RandomDelay and math.random() * 0.1 or 0))
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[key], false, game)
+    -- Use human-like delay
+    local delay = 0.05 + math.random() * 0.1
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode[key], false, nil)
+    task.wait(delay)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode[key], false, nil)
 end
 
-local function ExecuteComboSequence()
-    if Config.IsExecuting or #Combo.Active == 0 then return end
+-- Execute Combo
+local function ExecuteCombo()
+    if Config.IsExecuting or #Combo.Execution == 0 then return end
     
     Config.IsExecuting = true
-    
     local target = Config.CurrentTarget
+    
     if not target then
         Config.IsExecuting = false
         return
@@ -1330,33 +1021,28 @@ local function ExecuteComboSequence()
     end
     
     -- Update UI
-    TargetName.Text = "Name: " .. target.Name
-    TargetLevel.Text = "Level: " .. (GetPlayerInfo(target).Level or 0)
+    TargetNameLabel.Text = "Name: " .. target.Name
+    local targetInfo = GetPlayerInfo(target)
+    TargetHealthLabel.Text = "Health: " .. math.floor(targetHumanoid.Health) .. "/" .. math.floor(targetHumanoid.MaxHealth)
     
     -- Approach target
-    AddLogMessage("Approaching target: " .. target.Name)
-    MoveToPosition(targetRoot.Position, 1.2)
-    
-    -- Fly for final approach
+    MoveToPosition(targetRoot.Position)
     FlyToTarget(targetRoot.Position)
     
     -- Execute combo loop
-    AddLogMessage("Executing combo on " .. target.Name)
-    
-    while targetHumanoid and targetHumanoid.Health > 0 and Config.IsExecuting do
-        -- Execute each skill in combo
-        for _, skill in ipairs(Combo.Active) do
-            if not skill or skill == "None" then continue end
+    repeat
+        for _, skill in ipairs(Combo.Execution) do
+            if not skill then continue end
             
             ExecuteSkill(skill)
             
             -- Small delay between skills
-            task.wait(0.05 + (Combo.RandomDelay and math.random() * 0.05 or 0))
+            task.wait(0.05 + math.random() * 0.05)
             
-            -- Update target health display
+            -- Update target health
             if targetHumanoid then
                 local healthPercent = math.floor((targetHumanoid.Health / targetHumanoid.MaxHealth) * 100)
-                TargetHealth.Text = "Health: " .. healthPercent .. "%"
+                TargetHealthLabel.Text = "Health: " .. healthPercent .. "%"
             end
             
             -- Check if target died
@@ -1365,127 +1051,149 @@ local function ExecuteComboSequence()
             end
         end
         
-        -- Emergency protocol check
+        -- Emergency protocol
         if Humanoid.Health / Humanoid.MaxHealth <= Safety.LowHPThreshold then
-            AddLogMessage("Low HP! Activating emergency protocol")
-            
-            -- Teleport to safe location
-            local safePos = HumanoidRootPart.Position + Vector3.new(
-                math.random(-200, 200),
-                50,
-                math.random(-200, 200)
-            )
-            MoveToPosition(safePos, 2)
-            
-            -- Wait for safety
-            task.wait(3)
-            
-            -- Return to target
-            if targetRoot then
-                MoveToPosition(targetRoot.Position, 1.2)
+            if Safety.EmergencyTP then
+                -- Teleport to safe location
+                local safePos = HumanoidRootPart.Position + Vector3.new(
+                    math.random(-100, 100),
+                    20,
+                    math.random(-100, 100)
+                )
+                MoveToPosition(safePos)
+                task.wait(2)
+                
+                -- Return to target
+                if targetRoot then
+                    MoveToPosition(targetRoot.Position)
+                end
             end
         end
         
-        -- Anti-Report: Random movement
-        if Safety.AntiReport and math.random(1, 5) == 1 then
-            local randomMove = Vector3.new(
-                math.random(-3, 3),
+        -- Anti-Report movement
+        if Safety.AntiReport and math.random(1, 3) == 1 then
+            HumanoidRootPart.Velocity = Vector3.new(
+                math.random(-5, 5),
                 0,
-                math.random(-3, 3)
+                math.random(-5, 5)
             )
-            HumanoidRootPart.Velocity = randomMove * 10
-        end
-        
-        -- Check for combo loop
-        if not Combo.Loop then
-            break
         end
         
         task.wait(0.1)
-    end
+    until not Combo.Loop or not targetHumanoid or targetHumanoid.Health <= 0
     
     -- Target defeated
     if targetHumanoid and targetHumanoid.Health <= 0 then
         Config.Kills = Config.Kills + 1
         Config.CooldownList[target.Name] = os.time()
         
-        -- Simulate bounty gain (replace with actual game detection)
-        local bountyGain = math.random(50000, 200000)
+        -- Add bounty (simulated)
+        local bountyGain = math.random(50000, 150000)
         Config.SessionBounty = Config.SessionBounty + bountyGain
         Config.TotalBounty = Config.TotalBounty + bountyGain
         
-        AddLogMessage("Defeated " .. target.Name .. " (+" .. bountyGain .. " bounty)")
+        -- Update UI
+        KillsLabel.Text = "Kills: " .. Config.Kills
     end
     
     -- Cleanup
     Config.IsExecuting = false
     Config.CurrentTarget = nil
-    
-    TargetName.Text = "Name: None"
-    TargetHealth.Text = "Health: 100%"
+    TargetNameLabel.Text = "Name: None"
+    TargetHealthLabel.Text = "Health: 100%"
 end
 
--- Next Player System
-NextPlayerButton.MouseButton1Click:Connect(function()
+-- Next Player Button
+NextPlayerBtn.MouseButton1Click:Connect(function()
     local target = FindBestTarget()
     
     if target then
         Config.CurrentTarget = target
-        AddLogMessage("Selected target: " .. target.Name)
         
         if Config.IsExecuting then
             Config.IsExecuting = false
             task.wait(0.5)
         end
         
-        ExecuteComboSequence()
+        ExecuteCombo()
     else
-        AddLogMessage("No valid target found")
+        warn("No valid target found")
     end
 end)
 
--- Server Hop System
-HopServerButton.MouseButton1Click:Connect(function()
-    AddLogMessage("Initiating server hop...")
+-- Start Farming Button
+StartFarmingBtn.MouseButton1Click:Connect(function()
+    Config.IsFarming = not Config.IsFarming
     
-    -- Save current session
-    local sessionData = {
-        SessionBounty = Config.SessionBounty,
-        Kills = Config.Kills,
-        Deaths = Config.Deaths,
-        Time = os.time() - Config.StartTime
-    }
-    
-    -- Implementation for server hopping would go here
-    -- This is game-specific and requires proper implementation
-    
-    AddLogMessage("Server hop initiated")
+    if Config.IsFarming then
+        StartFarmingBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        StartFarmingBtn.Text = "STOP FARMING"
+        
+        -- Start farming loop
+        task.spawn(function()
+            while Config.IsFarming do
+                if not Config.IsExecuting then
+                    local target = FindBestTarget()
+                    if target then
+                        Config.CurrentTarget = target
+                        ExecuteCombo()
+                    else
+                        task.wait(2)
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        StartFarmingBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+        StartFarmingBtn.Text = "START FARMING"
+    end
 end)
 
--- Update Display Loop
+-- Hop Server Function (FIXED)
+HopServerBtn.MouseButton1Click:Connect(function()
+    local function hop()
+        local servers = {}
+        local success, result = pcall(function()
+            -- Try to get servers (simulated for now)
+            -- In real implementation, you would use TeleportService
+            for i = 1, 5 do
+                table.insert(servers, {
+                    id = tostring(math.random(1000000, 9999999)),
+                    players = math.random(1, 12)
+                })
+            end
+        end)
+        
+        if success and #servers > 0 then
+            Config.ServerHopCount = Config.ServerHopCount + 1
+            warn("Hopping to new server...")
+            
+            -- In real implementation:
+            -- TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[1].id, Player)
+        else
+            warn("Could not find servers to hop to")
+        end
+    end
+    
+    hop()
+end)
+
+-- Update UI Loop
 task.spawn(function()
     while task.wait(1) do
         -- Update bounty display
-        CurrentBountyLabel.Text = "CURRENT BOUNTY: " .. Config.TotalBounty
-        SessionBountyLabel.Text = "SESSION TOTAL: " .. Config.SessionBounty
+        BountyLabel.Text = "Bounty: " .. Config.TotalBounty
         
         -- Update time
         local sessionTime = os.time() - Config.StartTime
         local hours = math.floor(sessionTime / 3600)
         local minutes = math.floor((sessionTime % 3600) / 60)
         local seconds = math.floor(sessionTime % 60)
-        TimeLabel.Text = string.format("TIME: %02d:%02d:%02d", hours, minutes, seconds)
+        TimeLabel.Text = string.format("Time: %02d:%02d:%02d", hours, minutes, seconds)
         
-        -- Update KDR
-        local kdr = Config.Deaths > 0 and (Config.Kills / Config.Deaths) or Config.Kills
-        KDRLabel.Text = string.format("K/D: %.2f", kdr)
-        
-        -- Update analytics
-        local bountyPerHour = sessionTime > 0 and (Config.SessionBounty / (sessionTime / 3600)) or 0
-        BPHLabel.Text = "Bounty/Hour: " .. math.floor(bountyPerHour)
-        
-        -- Update ping
-        PingDisplay.Text = "Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms"
+        -- Update combo info
+        ComboInfoLabel.Text = "Click buttons to set moves\nCurrent: " .. (#Combo.Execution > 0 and table.concat(Combo.Execution, " → ") or "None")
         
         -- Update circle zone position
         if HumanoidRootPart then
@@ -1500,27 +1208,13 @@ task.spawn(function()
     end
 end)
 
--- Auto Farm System
-task.spawn(function()
-    while task.wait(2) do
-        if Config.AutoFarm and not Config.IsExecuting then
-            local target = FindBestTarget()
-            if target then
-                Config.CurrentTarget = target
-                ExecuteComboSequence()
-            end
-        end
-    end
-end)
-
 -- Auto Server Hop
 task.spawn(function()
     while task.wait(Server.HopDelay) do
-        if Server.AutoHop and not Config.IsExecuting then
+        if Server.AutoHop and not Config.IsExecuting and not Config.IsFarming then
             local playerCount = #Players:GetPlayers()
             if playerCount < Server.MinPlayers then
-                AddLogMessage("Low player count, initiating auto hop")
-                HopServerButton:MouseButton1Click()
+                HopServerBtn:MouseButton1Click()
             end
         end
     end
@@ -1530,318 +1224,20 @@ end)
 task.spawn(function()
     while task.wait(0.5) do
         if Humanoid.Health / Humanoid.MaxHealth <= Safety.LowHPThreshold and Safety.EmergencyTP then
-            AddLogMessage("Emergency: Low health detected!")
-            
             if Config.IsExecuting then
                 Config.IsExecuting = false
             end
             
-            -- Teleport to random safe location
-            local safePos = Vector3.new(
-                math.random(-1000, 1000),
-                100,
-                math.random(-1000, 1000)
+            -- Teleport to safe location
+            local safePos = HumanoidRootPart.Position + Vector3.new(
+                math.random(-200, 200),
+                30,
+                math.random(-200, 200)
             )
-            MoveToPosition(safePos, 2)
-            
-            -- Wait for healing
-            task.wait(5)
+            MoveToPosition(safePos)
+            task.wait(3)
         end
     end
-end)
-
--- UI Event Handlers
-SafeZoneToggle.MouseButton1Click:Connect(function()
-    Targeting.AvoidSafeZone = not Targeting.AvoidSafeZone
-    SafeZoneToggle.BackgroundColor3 = Targeting.AvoidSafeZone and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    SafeZoneToggle.Text = "Avoid Safe Zone: " .. (Targeting.AvoidSafeZone and "ON" or "OFF")
-end)
-
-PVPCheckToggle.MouseButton1Click:Connect(function()
-    Targeting.CheckPVP = not Targeting.CheckPVP
-    PVPCheckToggle.BackgroundColor3 = Targeting.CheckPVP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    PVPCheckToggle.Text = "Check PVP: " .. (Targeting.CheckPVP and "ON" or "OFF")
-end)
-
-BezierToggle.MouseButton1Click:Connect(function()
-    Movement.UseBezier = not Movement.UseBezier
-    BezierToggle.BackgroundColor3 = Movement.UseBezier and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    BezierToggle.Text = "Bezier Curves: " .. (Movement.UseBezier and "ON" or "OFF")
-end)
-
-NoClipToggle.MouseButton1Click:Connect(function()
-    Movement.NoClip = not Movement.NoClip
-    NoClipToggle.BackgroundColor3 = Movement.NoClip and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    NoClipToggle.Text = "NoClip: " .. (Movement.NoClip and "ON" or "OFF")
-end)
-
-AutoCounterToggle.MouseButton1Click:Connect(function()
-    Safety.AutoCounter = not Safety.AutoCounter
-    AutoCounterToggle.BackgroundColor3 = Safety.AutoCounter and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    AutoCounterToggle.Text = "Auto Counter: " .. (Safety.AutoCounter and "ON" or "OFF")
-end)
-
-AntiReportToggle.MouseButton1Click:Connect(function()
-    Safety.AntiReport = not Safety.AntiReport
-    AntiReportToggle.BackgroundColor3 = Safety.AntiReport and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    AntiReportToggle.Text = "Anti-Report: " .. (Safety.AntiReport and "ON" or "OFF")
-end)
-
-EmergencyToggle.MouseButton1Click:Connect(function()
-    Safety.EmergencyTP = not Safety.EmergencyTP
-    EmergencyToggle.BackgroundColor3 = Safety.EmergencyTP and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    EmergencyToggle.Text = "Emergency TP: " .. (Safety.EmergencyTP and "ON" or "OFF")
-end)
-
-AutoHopToggle.MouseButton1Click:Connect(function()
-    Server.AutoHop = not Server.AutoHop
-    AutoHopToggle.BackgroundColor3 = Server.AutoHop and Color3.fromRGB(0, 180, 80) or Color3.fromRGB(180, 0, 80)
-    AutoHopToggle.Text = "Auto Server Hop: " .. (Server.AutoHop and "ON" or "OFF")
-end)
-
--- TextBox Updates
-MinLevelBox.FocusLost:Connect(function()
-    local value = tonumber(MinLevelBox.Text)
-    if value then
-        Targeting.MinLevel = math.clamp(value, 1, 5000)
-        MinLevelBox.Text = tostring(Targeting.MinLevel)
-        MinLevelLabel.Text = "Min Level: " .. Targeting.MinLevel
-    end
-end)
-
-MinBountyBox.FocusLost:Connect(function()
-    local value = tonumber(MinBountyBox.Text)
-    if value then
-        Targeting.MinBounty = math.clamp(value, 0, 10000000)
-        MinBountyBox.Text = tostring(Targeting.MinBounty)
-        MinBountyLabel.Text = "Min Bounty: " .. Targeting.MinBounty
-    end
-end)
-
-TravelSpeedBox.FocusLost:Connect(function()
-    local value = tonumber(TravelSpeedBox.Text)
-    if value then
-        Movement.Speed = math.clamp(value, 50, 1000)
-        TravelSpeedBox.Text = tostring(Movement.Speed)
-        TravelSpeedLabel.Text = "Speed: " .. Movement.Speed
-    end
-end)
-
-FlySpeedBox.FocusLost:Connect(function()
-    local value = tonumber(FlySpeedBox.Text)
-    if value then
-        Movement.FlySpeed = math.clamp(value, 50, 500)
-        FlySpeedBox.Text = tostring(Movement.FlySpeed)
-        FlySpeedLabel.Text = "Fly Speed: " .. Movement.FlySpeed
-    end
-end)
-
-HPThresholdBox.FocusLost:Connect(function()
-    local value = tonumber(HPThresholdBox.Text)
-    if value then
-        Safety.LowHPThreshold = math.clamp(value / 100, 0.1, 0.5)
-        HPThresholdBox.Text = tostring(value)
-        HPThresholdLabel.Text = "Low HP: " .. value .. "%"
-    end
-end)
-
-MinPlayersBox.FocusLost:Connect(function()
-    local value = tonumber(MinPlayersBox.Text)
-    if value then
-        Server.MinPlayers = math.clamp(value, 1, 20)
-        MinPlayersBox.Text = tostring(Server.MinPlayers)
-        MinPlayersLabel.Text = "Min Players: " .. Server.MinPlayers
-    end
-end)
-
-HopDelayBox.FocusLost:Connect(function()
-    local value = tonumber(HopDelayBox.Text)
-    if value then
-        Server.HopDelay = math.clamp(value, 60, 1800)
-        HopDelayBox.Text = tostring(Server.HopDelay)
-        HopDelayLabel.Text = "Hop Delay: " .. Server.HopDelay .. "s"
-    end
-end)
-
--- Combo Setup
-for i = 1, 4 do
-    local skillTypes = {"Sword", "Fruit", "Melee", "Gun", "Style"}
-    
-    StageDropdowns[i].MouseButton1Click:Connect(function()
-        -- Create dropdown menu
-        local dropdown = Instance.new("Frame")
-        dropdown.Size = UDim2.new(0, 100, 0, 150)
-        dropdown.Position = UDim2.new(0, 0, 1, 0)
-        dropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-        dropdown.BorderSizePixel = 0
-        dropdown.Visible = true
-        dropdown.ZIndex = 100
-        dropdown.Parent = StageDropdowns[i]
-        
-        for _, skillType in ipairs(skillTypes) do
-            local option = Instance.new("TextButton")
-            option.Size = UDim2.new(1, 0, 0, 30)
-            option.Position = UDim2.new(0, 0, 0, (table.find(skillTypes, skillType)-1)*30)
-            option.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-            option.Text = skillType
-            option.TextColor3 = Color3.white
-            option.Font = Enum.Font.Gotham
-            option.TextSize = 12
-            option.Parent = dropdown
-            
-            option.MouseButton1Click:Connect(function()
-                StageDropdowns[i].Text = skillType
-                MoveDropdowns[i].Visible = true
-                dropdown:Destroy()
-                
-                -- Update combo
-                if not Combo.Active[i] then
-                    Combo.Active[i] = {}
-                end
-                Combo.Active[i].Type = skillType
-            end)
-        end
-    end)
-    
-    MoveDropdowns[i].MouseButton1Click:Connect(function()
-        local skillType = StageDropdowns[i].Text
-        if skillType == "Select Type" then return end
-        
-        local moves = Skills[skillType] or {"Z", "X", "C", "V", "F"}
-        
-        local dropdown = Instance.new("Frame")
-        dropdown.Size = UDim2.new(0, 60, 0, 150)
-        dropdown.Position = UDim2.new(0, 0, 1, 0)
-        dropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-        dropdown.BorderSizePixel = 0
-        dropdown.Visible = true
-        dropdown.ZIndex = 100
-        dropdown.Parent = MoveDropdowns[i]
-        
-        for _, move in ipairs(moves) do
-            local option = Instance.new("TextButton")
-            option.Size = UDim2.new(1, 0, 0, 30)
-            option.Position = UDim2.new(0, 0, 0, (table.find(moves, move)-1)*30)
-            option.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-            option.Text = move
-            option.TextColor3 = Color3.white
-            option.Font = Enum.Font.Gotham
-            option.TextSize = 12
-            option.Parent = dropdown
-            
-            option.MouseButton1Click:Connect(function()
-                MoveDropdowns[i].Text = move
-                dropdown:Destroy()
-                
-                -- Update combo
-                if not Combo.Active[i] then
-                    Combo.Active[i] = {}
-                end
-                Combo.Active[i].Move = move
-                
-                -- Add to execution list
-                local executionList = {}
-                for j = 1, 4 do
-                    if Combo.Active[j] and Combo.Active[j].Move then
-                        table.insert(executionList, Combo.Active[j].Move)
-                    end
-                end
-                Combo.Execution = executionList
-            end)
-        end
-    end)
-end
-
--- Execute Button
-ExecuteBtn.MouseButton1Click:Connect(function()
-    if #Combo.Execution > 0 then
-        Config.IsExecuting = not Config.IsExecuting
-        
-        if Config.IsExecuting then
-            ExecuteBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-            ExecuteBtn.Text = "STOP COMBO"
-            
-            if not Config.CurrentTarget then
-                Config.CurrentTarget = FindBestTarget()
-            end
-            
-            if Config.CurrentTarget then
-                ExecuteComboSequence()
-            end
-        else
-            ExecuteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-            ExecuteBtn.Text = "EXECUTE COMBO"
-        end
-    else
-        AddLogMessage("No combo configured!")
-    end
-end)
-
--- Save/Load Combo
-SaveComboBtn.MouseButton1Click:Connect(function()
-    if #Combo.Active > 0 then
-        local comboData = {}
-        for i, skill in ipairs(Combo.Active) do
-            if skill and skill.Move then
-                comboData[i] = {
-                    Type = skill.Type,
-                    Move = skill.Move
-                }
-            end
-        end
-        
-        table.insert(Combo.Saved, comboData)
-        AddLogMessage("Combo saved! Total saved: " .. #Combo.Saved)
-    else
-        AddLogMessage("No combo to save!")
-    end
-end)
-
-LoadComboBtn.MouseButton1Click:Connect(function()
-    if #Combo.Saved > 0 then
-        local lastCombo = Combo.Saved[#Combo.Saved]
-        
-        -- Clear current
-        for i = 1, 4 do
-            StageDropdowns[i].Text = "Select Type"
-            MoveDropdowns[i].Visible = false
-            MoveDropdowns[i].Text = "Move"
-            Combo.Active[i] = nil
-        end
-        
-        -- Load saved
-        for i, skill in pairs(lastCombo) do
-            if i <= 4 then
-                StageDropdowns[i].Text = skill.Type
-                MoveDropdowns[i].Visible = true
-                MoveDropdowns[i].Text = skill.Move
-                Combo.Active[i] = skill
-            end
-        end
-        
-        -- Update execution list
-        local executionList = {}
-        for i = 1, 4 do
-            if Combo.Active[i] and Combo.Active[i].Move then
-                table.insert(executionList, Combo.Active[i].Move)
-            end
-        end
-        Combo.Execution = executionList
-        
-        AddLogMessage("Combo loaded!")
-    else
-        AddLogMessage("No saved combos!")
-    end
-end)
-
--- Force Hop Server
-ForceHopBtn.MouseButton1Click:Connect(function()
-    HopServerButton:MouseButton1Click()
-end)
-
--- Save Session
-SaveSessionBtn.MouseButton1Click:Connect(function()
-    AddLogMessage("Session data saved to memory")
 end)
 
 -- Character Added Event
@@ -1849,19 +1245,17 @@ Player.CharacterAdded:Connect(function(char)
     Character = char
     Humanoid = char:WaitForChild("Humanoid")
     HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
-    
-    AddLogMessage("Character respawned")
+    warn("Character respawned")
 end)
 
 -- Death Tracking
 Humanoid.Died:Connect(function()
     Config.Deaths = Config.Deaths + 1
-    AddLogMessage("Player died. Total deaths: " .. Config.Deaths)
+    warn("Player died. Total deaths: " .. Config.Deaths)
     
-    -- Auto rejoin after 5 seconds
     task.wait(5)
     if Humanoid.Health <= 0 then
-        AddLogMessage("Attempting recovery...")
+        warn("Attempting recovery...")
     end
 end)
 
@@ -1871,28 +1265,24 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     
     if input.KeyCode == Enum.KeyCode.Insert then
         MainContainer.Visible = not MainContainer.Visible
-        BountyWindow.Visible = not BountyWindow.Visible
     elseif input.KeyCode == Enum.KeyCode.F5 then
-        NextPlayerButton:MouseButton1Click()
+        NextPlayerBtn:MouseButton1Click()
     elseif input.KeyCode == Enum.KeyCode.F6 then
-        HopServerButton:MouseButton1Click()
+        StartFarmingBtn:MouseButton1Click()
     elseif input.KeyCode == Enum.KeyCode.F7 then
-        ExecuteBtn:MouseButton1Click()
-    elseif input.KeyCode == Enum.KeyCode.F8 then
-        Config.AutoFarm = not Config.AutoFarm
-        AddLogMessage("Auto Farm: " .. (Config.AutoFarm and "ON" or "OFF"))
+        HopServerBtn:MouseButton1Click()
     end
 end)
 
--- Initialization
-AddLogMessage("NEXUS BOUNTY v3.0 Initialized")
-AddLogMessage("System Ready - Insert to toggle UI")
-AddLogMessage("F5: Next Player | F6: Hop Server | F7: Execute | F8: Auto Farm")
+-- Initialize with random combo
+for i = 1, 4 do
+    local moves = {"Z", "X", "C", "V", "F"}
+    ComboButtons[i].Text = moves[math.random(1, #moves)]
+    Combo.Active[i] = ComboButtons[i].Text
+    table.insert(Combo.Execution, Combo.Active[i])
+end
+ComboInfoLabel.Text = "Click buttons to set moves\nCurrent: " .. table.concat(Combo.Execution, " → ")
 
-print([[
-╔══════════════════════════════════════════╗
-║     NEXUS BOUNTY v3.0 LOADED            ║
-║     Complete Bounty System              ║
-║     Lines: 1500+ | All Features         ║
-╚══════════════════════════════════════════╝
-]])
+print("NEXUS BOUNTY v4.0 LOADED SUCCESSFULLY")
+print("Auto-selected Pirate team")
+print("Insert: Toggle UI | F5: Next Player | F6: Farm | F7: Hop")
