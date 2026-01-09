@@ -1,272 +1,184 @@
---[[ 
-Blox Fruits AUTO SCRIPT
-Features:
-- Auto Marines
-- Auto Fruit + Store
-- Factory (Second Sea)
-- Pirates (Third Sea)
-- GUI Server Hop (Germany / Singapore) with Retry
-- Status + Pause
-]]
+--==================================================
+-- AUTO BLOX FRUITS V2 PRO
+--==================================================
 
-if not game:IsLoaded() then game.Loaded:Wait() end
-
--- SERVICES
+--==================== SERVICES ====================
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
-local LP = Players.LocalPlayer
-local PlayerGui = LP:WaitForChild("PlayerGui")
-
--- CONSTANTS
-local SECOND_SEA = 4442272183
-local THIRD_SEA  = 7449423635
-local NO_FRUIT_TIMEOUT = 20
+--==================== CONFIG ======================
+local FRUIT_SEARCH_TIME = 20
+local FACTORY_TIME = 10
+local GACHA_TIME = 10
+local STORE_TRIES = 6
 local REGIONS = {"germany","singapore"}
-local MAX_JOIN_RETRY = 5
-local JOIN_WAIT = 8
+local JOIN_TIMEOUT = 8
+local MAX_JOIN_TRIES = 5
 
--- FLAGS
-local PAUSED = false
-local STATUS = "Initializing"
-local noFruitStart = nil
-
--- TIME
+--==================== STATE =======================
 local START_TIME = tick()
-local SESSION_TIME = tick()
+local SESSION_START = tick()
+local PAUSED = false
+local STATUS = "Idle"
 
--- ================= CHARACTER =================
-local function getChar()
-    local c = LP.Character or LP.CharacterAdded:Wait()
-    return c, c:WaitForChild("HumanoidRootPart"), c:WaitForChild("Humanoid")
+--==================== UTILS =======================
+local function click(ui)
+    if not ui then return end
+    local pos = ui.AbsolutePosition + (ui.AbsoluteSize / 2)
+    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,true,game,0)
+    task.wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0)
 end
 
--- ================= AUTO TEAM (MARINES) =================
-task.spawn(function()
-    repeat task.wait() until PlayerGui:FindFirstChild("ChooseTeam", true)
-    local gui = PlayerGui:FindFirstChild("ChooseTeam", true)
-    if gui and gui:FindFirstChild("Marines", true) then
-        STATUS = "Choosing Marines"
-        pcall(function()
-            gui.Marines.Activate:Fire()
-        end)
-    end
-end)
+local function setStatus(t)
+    STATUS = t
+    print("[STATUS]",t)
+end
 
--- ================= GUI =================
-local gui = Instance.new("ScreenGui", PlayerGui)
-gui.ResetOnSpawn = false
+--==================== UI ==========================
+local ScreenGui = Instance.new("ScreenGui",PlayerGui)
+ScreenGui.Name = "AutoV2UI"
 
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.fromScale(0.35,0.26)
-frame.Position = UDim2.fromScale(0.32,0.05)
-frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+local Frame = Instance.new("Frame",ScreenGui)
+Frame.Size = UDim2.fromScale(0.28,0.14)
+Frame.Position = UDim2.fromScale(0.36,0.04)
+Frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+Frame.BackgroundTransparency = 0.25
 
-local label = Instance.new("TextLabel", frame)
-label.Size = UDim2.fromScale(1,0.8)
-label.BackgroundTransparency = 1
-label.TextColor3 = Color3.new(1,1,1)
-label.TextScaled = true
-label.TextWrapped = true
+local Label = Instance.new("TextLabel",Frame)
+Label.Size = UDim2.fromScale(1,1)
+Label.BackgroundTransparency = 1
+Label.TextColor3 = Color3.new(1,1,1)
+Label.TextScaled = true
 
-local pauseBtn = Instance.new("TextButton", frame)
-pauseBtn.Size = UDim2.fromScale(1,0.2)
-pauseBtn.Position = UDim2.fromScale(0,0.8)
-pauseBtn.Text = "⏸ PAUSE"
-pauseBtn.TextScaled = true
-pauseBtn.BackgroundColor3 = Color3.fromRGB(90,0,0)
-pauseBtn.TextColor3 = Color3.new(1,1,1)
-
-pauseBtn.MouseButton1Click:Connect(function()
-    PAUSED = not PAUSED
-    if PAUSED then
-        STATUS = "Paused"
-        frame.Visible = false
-    else
-        frame.Visible = true
-        SESSION_TIME = tick()
-        STATUS = "Resumed"
+Frame.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        PAUSED = not PAUSED
+        setStatus(PAUSED and "PAUSED" or "RESUMED")
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    label.Text =
+    if PAUSED then
+        Label.Text = "PAUSED"
+        return
+    end
+    Label.Text =
         "Total: "..math.floor(tick()-START_TIME).."s\n"..
-        "Session: "..math.floor(tick()-SESSION_TIME).."s\n"..
+        "Session: "..math.floor(tick()-SESSION_START).."s\n"..
         "Status: "..STATUS
 end)
 
--- ================= MOVEMENT =================
-local function flyTo(pos)
-    if PAUSED then return end
-    local _, hrp = getChar()
-    local d = (hrp.Position - pos).Magnitude
-    TweenService:Create(
-        hrp,
-        TweenInfo.new(math.max(0.1, d/350)),
-        {CFrame = CFrame.new(pos)}
-    ):Play()
-    task.wait(d/350)
+--==================== TEAM SELECT =================
+local function isBlue(c)
+    return c.B > 0.6 and c.B > c.R and c.B > c.G
 end
 
--- ================= COMBAT =================
-local function key(k)
-    VirtualInputManager:SendKeyEvent(true,k,false,game)
-    task.wait()
-    VirtualInputManager:SendKeyEvent(false,k,false,game)
+local function selectMarines()
+    local screenX = Workspace.CurrentCamera.ViewportSize.X
+    local screenY = Workspace.CurrentCamera.ViewportSize.Y
+
+    for _,v in pairs(PlayerGui:GetDescendants()) do
+        if v:IsA("ImageButton") then
+            local pos,size = v.AbsolutePosition,v.AbsoluteSize
+            if pos.X > screenX*0.45 and pos.Y > screenY*0.35 then
+                if size.X > 100 and size.Y > 100 then
+                    if isBlue(v.ImageColor3) or isBlue(v.BackgroundColor3) then
+                        click(v)
+                        task.wait(1)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
 end
 
-local function click()
-    VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
-    task.wait()
-    VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
-end
-
-local function combo()
-    click()
-    key(Enum.KeyCode.Z)
-    key(Enum.KeyCode.X)
-    key(Enum.KeyCode.C)
-end
-
--- ================= FRUIT =================
+--==================== FRUIT =======================
 local function findFruit()
-    for _,v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Tool") and v:FindFirstChild("Handle")
-        and v.Name:lower():find("fruit") then
-            return v
+    for _,v in pairs(Workspace:GetChildren()) do
+        if v:IsA("Tool") and v:FindFirstChild("Handle") then
+            if v.Name:lower():find("fruit") then
+                return v
+            end
         end
     end
 end
 
 local function storeFruit()
-    for i=1,6 do
-        pcall(function()
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit")
-        end)
-        task.wait(0.3)
-    end
-end
-
--- ================= FACTORY =================
-local function findFactory()
-    return Workspace:FindFirstChild("Factory")
-end
-
--- ================= PIRATES =================
-local function findPirate()
-    if not Workspace:FindFirstChild("Enemies") then return end
-    for _,v in pairs(Workspace.Enemies:GetChildren()) do
-        if v:FindFirstChild("HumanoidRootPart")
-        and v:FindFirstChild("Humanoid")
-        and v.Name:lower():find("pirate") then
-            return v
+    setStatus("Storing Fruit")
+    for i=1,STORE_TRIES do
+        for _,v in pairs(PlayerGui:GetDescendants()) do
+            if v:IsA("TextButton") and v.Text:lower():find("store") then
+                click(v)
+                task.wait(0.4)
+            end
         end
+        task.wait(0.6)
     end
 end
 
--- ================= SERVER HOP (GUI) =================
-local function clickUI(ui)
-    local pos = ui.AbsolutePosition + (ui.AbsoluteSize / 2)
-    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,true,game,0)
-    task.wait()
-    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0)
-end
-
-local function serverHopGUI(region)
-    STATUS = "Server Hop: "..region
-
-    -- open server list
+--==================== SERVER HOP ==================
+local function serverHop()
+    setStatus("Server Hop")
     for _,v in pairs(PlayerGui:GetDescendants()) do
         if v:IsA("ImageButton") and v.Name:lower():find("server") then
-            clickUI(v)
+            click(v)
             task.wait(1)
             break
         end
     end
 
-    -- search box
-    local search
-    for _,v in pairs(PlayerGui:GetDescendants()) do
-        if v:IsA("TextBox") then
-            search = v
-            break
-        end
-    end
-    if not search then return end
-
-    search.Text = region
-    task.wait(1)
-
-    -- join
-    for _,v in pairs(PlayerGui:GetDescendants()) do
-        if v:IsA("TextButton") and v.Text:lower():find("join") then
-            clickUI(v)
-            return
-        end
-    end
-end
-
-local function smartServerHop()
-    for i=1,MAX_JOIN_RETRY do
-        local region = REGIONS[(i-1)%#REGIONS+1]
-        STATUS = "Trying "..region.." ("..i..")"
-        serverHopGUI(region)
-        task.wait(JOIN_WAIT)
-    end
-    STATUS = "Server Hop Failed"
-end
-
--- ================= MAIN LOOP =================
-task.spawn(function()
-    while true do
-        if PAUSED then task.wait(1) continue end
-
-        local fruit = findFruit()
-
-        if fruit then
-            STATUS = "Fruit Found: "..fruit.Name
-            noFruitStart = nil
-            flyTo(fruit.Handle.Position + Vector3.new(0,3,0))
-            task.wait(0.4)
-            storeFruit()
-
-        else
-            STATUS = "Searching Fruit"
-            if not noFruitStart then
-                noFruitStart = tick()
+    for _,region in ipairs(REGIONS) do
+        for _,v in pairs(PlayerGui:GetDescendants()) do
+            if v:IsA("TextBox") and v.PlaceholderText:lower():find("region") then
+                v.Text = region
+                task.wait(1)
             end
+        end
 
-            if tick() - noFruitStart >= NO_FRUIT_TIMEOUT then
-                if game.PlaceId == SECOND_SEA then
-                    STATUS = "Searching Factory"
-                    local f = findFactory()
-                    if f and f:FindFirstChild("HumanoidRootPart") then
-                        flyTo(f.HumanoidRootPart.Position)
-                        repeat task.wait(0.3) combo() until not f.Parent
-                    else
-                        smartServerHop()
-                    end
-                elseif game.PlaceId == THIRD_SEA then
-                    STATUS = "Searching Pirates"
-                    local p = findPirate()
-                    if p then
-                        flyTo(p.HumanoidRootPart.Position)
-                        repeat task.wait(0.3) combo() until p.Humanoid.Health <= 0
-                    else
-                        smartServerHop()
-                    end
-                else
-                    smartServerHop()
+        for try=1,MAX_JOIN_TRIES do
+            for _,v in pairs(PlayerGui:GetDescendants()) do
+                if v:IsA("TextButton") and v.Text:lower()=="join" then
+                    click(v)
+                    task.wait(JOIN_TIMEOUT)
                 end
-                noFruitStart = nil
             end
         end
+    end
+end
 
+--==================== MAIN ========================
+task.spawn(function()
+    repeat task.wait(1) until selectMarines()
+
+    while true do
         task.wait(1)
+        if PAUSED then continue end
+
+        -- Fruit Search
+        setStatus("Fruit Searching")
+        local t0 = tick()
+        while tick()-t0 < FRUIT_SEARCH_TIME do
+            local fruit = findFruit()
+            if fruit and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                setStatus("Fruit Found: "..fruit.Name)
+                fruit.Handle.CFrame = Player.Character.HumanoidRootPart.CFrame
+                task.wait(1)
+                storeFruit()
+                break
+            end
+            task.wait(0.5)
+        end
+
+        -- Factory / Pirates / Gacha skipped → Hop
+        setStatus("No Fruit - Hop")
+        serverHop()
+        task.wait(5)
     end
 end)
