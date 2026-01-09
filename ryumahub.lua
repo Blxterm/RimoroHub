@@ -169,6 +169,31 @@ local Services = {
     WebService = game:GetService("WebService")
 }
 
+-- Blox Fruits Remotes & Constants
+local Remotes = {
+    CommF = Services.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"),
+    CommE = Services.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommE"),
+    CombatEvent = Services.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CombatEvent"),
+    InventoryEvent = Services.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("InventoryEvent"),
+    QuestEvent = Services.ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("QuestEvent")
+}
+
+local GameConstants = {
+    Islands = {
+        ["Sea 1"] = {
+            ["Starter Island"] = Vector3.new(1000, 100, 1000),
+            ["Jungle"] = Vector3.new(-1200, 50, 300),
+            -- Add more islands as needed
+        },
+        ["Sea 2"] = {
+            ["Kingdom of Rose"] = Vector3.new(-400, 70, 200),
+        },
+        ["Sea 3"] = {
+            ["Turtle Island"] = Vector3.new(-12000, 300, -12000),
+        }
+    }
+}
+
 -- Player and Character References
 local Player = Services.Players.LocalPlayer
 local Character = nil
@@ -1377,19 +1402,26 @@ local AdvancedTargetingSystem = {
         return (HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
     end,
     
-    -- Estimate player level (placeholder - needs actual implementation)
+    -- Get real player level from Blox Fruits data
     EstimateLevel = function(self, player)
-        -- This should be replaced with actual level detection
-        -- For now, return a random value within range
-        return math.random(ConfigurationSystem.CurrentConfig.Targeting.MinLevel, 
-                          ConfigurationSystem.CurrentConfig.Targeting.MaxLevel)
+        local data = player:FindFirstChild("Data")
+        if data and data:FindFirstChild("Level") then
+            return data.Level.Value
+        end
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Level") then
+            return leaderstats.Level.Value
+        end
+        return 0
     end,
     
-    -- Estimate player bounty (placeholder - needs actual implementation)
+    -- Get real player bounty from Blox Fruits data
     EstimateBounty = function(self, player)
-        -- This should be replaced with actual bounty detection
-        local level = self:EstimateLevel(player)
-        return level * 5 -- Rough estimate
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Bounty/Honor") then
+            return leaderstats["Bounty/Honor"].Value
+        end
+        return 0
     end,
     
     -- Check if player is valid target
@@ -1850,15 +1882,28 @@ local AdvancedCombatSystem = {
         end
         
         local success = pcall(function()
-            if typeof(keyCode) == "EnumItem" then
-                if keyCode.EnumType == Enum.KeyCode then
+            -- Real Blox Fruits Attack Logic
+            if key == "M1" then
+                Remotes.CombatEvent:FireServer("Attack")
+            elseif key == "Z" or key == "X" or key == "C" or key == "V" then
+                -- Skill execution logic could be added here if specific remotes are needed
+                -- For now, we still use VirtualInput to trigger the UI/Skill
+                if typeof(keyCode) == "EnumItem" then
                     Services.VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
                     task.wait(0.03)
                     Services.VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-                elseif keyCode.EnumType == Enum.UserInputType then
-                    Services.VirtualInputManager:SendMouseButtonEvent(0, 0, keyCode, true, game, 0)
-                    task.wait(0.03)
-                    Services.VirtualInputManager:SendMouseButtonEvent(0, 0, keyCode, false, game, 0)
+                end
+            else
+                if typeof(keyCode) == "EnumItem" then
+                    if keyCode.EnumType == Enum.KeyCode then
+                        Services.VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                        task.wait(0.03)
+                        Services.VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+                    elseif keyCode.EnumType == Enum.UserInputType then
+                        Services.VirtualInputManager:SendMouseButtonEvent(0, 0, keyCode, true, game, 0)
+                        task.wait(0.03)
+                        Services.VirtualInputManager:SendMouseButtonEvent(0, 0, keyCode, false, game, 0)
+                    end
                 end
             end
         end)
@@ -1998,8 +2043,23 @@ local AdvancedCombatSystem = {
         end
     end,
     
+    -- Equip weapon based on type
+    EquipWeapon = function(self, weaponType)
+        local backpack = Player:FindFirstChild("Backpack")
+        if not backpack then return end
+        
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and (tool.ToolTip == weaponType or tool.Name:find(weaponType)) then
+                Humanoid:EquipTool(tool)
+                return true
+            end
+        end
+        return false
+    end,
+
     -- Fast attack sequence
     FastAttack = function(self)
+        self:EquipWeapon("Melee") -- Default to Melee for fast attack
         local attacks = {}
         
         if ConfigurationSystem.CurrentConfig.Skills.UseMeleeSkills then
@@ -2093,6 +2153,14 @@ local AdvancedCombatSystem = {
         return true
     end,
     
+    -- Auto Ken Haki
+    AutoKenHaki = function(self)
+        local hasHaki = Player:FindFirstChild("HasKenHaki") -- Example check
+        if not Character:FindFirstChild("KenHaki") then
+            Remotes.CommF:InvokeServer("KenHaki")
+        end
+    end,
+
     -- Auto block
     AutoBlock = function(self)
         if not ConfigurationSystem.CurrentConfig.Combat.AutoBlock then
@@ -2759,7 +2827,19 @@ local EnhancedFarmingSystem = {
         end
     end,
     
-    -- Approach target
+    -- Enhanced Teleport for Blox Fruits
+    Teleport = function(self, targetPos)
+        if not HumanoidRootPart then return end
+        local distance = (HumanoidRootPart.Position - targetPos).Magnitude
+        local speed = ConfigurationSystem.CurrentConfig.Movement.TeleportSpeed or 300
+        local duration = distance / speed
+        
+        local tween = Services.TweenService:Create(HumanoidRootPart, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetPos)})
+        tween:Play()
+        return tween
+    end,
+
+    -- Approach target with Teleport
     ApproachTarget = function(self)
         if not self.State.CurrentTarget then
             return false
@@ -2777,47 +2857,15 @@ local EnhancedFarmingSystem = {
         if not HumanoidRootPart then
             return false
         end
-        
-        local distance = (HumanoidRootPart.Position - targetRoot.Position).Magnitude
-        
-        if distance > 100 then
-            -- Teleport closer
-            local offset = Vector3.new(
-                math.random(-10, 10),
-                ConfigurationSystem.CurrentConfig.Movement.HeightOffset,
-                math.random(-10, 10)
-            )
-            
-            local targetPosition = targetRoot.Position + offset
-            
-            pcall(function()
-                if ConfigurationSystem.CurrentConfig.Movement.TeleportMethod == "Tween" then
-                    local tweenInfo = Services.TweenInfo.new(
-                        0.5,
-                        Enum.EasingStyle.Linear,
-                        Enum.EasingDirection.Out
-                    )
-                    
-                    local tween = Services.TweenService:Create(
-                        HumanoidRootPart,
-                        tweenInfo,
-                        {CFrame = CFrame.new(targetPosition)}
-                    )
-                    
-                    tween:Play()
-                else
-                    HumanoidRootPart.CFrame = CFrame.new(targetPosition)
-                end
-            end)
-            
-            task.wait(0.5)
-        end
-        
+
+        local targetPos = targetRoot.Position + Vector3.new(0, ConfigurationSystem.CurrentConfig.Movement.HeightOffset or 5, 0)
+        self:Teleport(targetPos)
         return true
     end,
     
     -- Attack loop
     AttackLoop = function(self)
+        self:AutoKenHaki()
         while StateManager.IsAttacking and self.State.CurrentTarget do
             if StateManager.IsPaused then
                 task.wait(1)
