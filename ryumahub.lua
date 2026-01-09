@@ -1,50 +1,68 @@
--- Blox Fruits AUTO | FINAL FIX (Server Hop + Status)
+--[[ 
+Blox Fruits AUTO SCRIPT
+Features:
+- Auto Marines
+- Auto Fruit + Store
+- Factory (Second Sea)
+- Pirates (Third Sea)
+- GUI Server Hop (Germany / Singapore) with Retry
+- Status + Pause
+]]
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- SERVICES
 local Players = game:GetService("Players")
-local Teams = game:GetService("Teams")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
--- PLAYER
 local LP = Players.LocalPlayer
-local Char = LP.Character or LP.CharacterAdded:Wait()
-local HRP = Char:WaitForChild("HumanoidRootPart")
+local PlayerGui = LP:WaitForChild("PlayerGui")
 
-LP.CharacterAdded:Connect(function(c)
-    Char = c
-    HRP = c:WaitForChild("HumanoidRootPart")
-end)
+-- CONSTANTS
+local SECOND_SEA = 4442272183
+local THIRD_SEA  = 7449423635
+local NO_FRUIT_TIMEOUT = 20
+local REGIONS = {"germany","singapore"}
+local MAX_JOIN_RETRY = 5
+local JOIN_WAIT = 8
 
--- TEAM AUTO
-pcall(function()
-    if not LP.Team and Teams:FindFirstChild("Marines") then
-        LP.Team = Teams.Marines
-    end
-end)
+-- FLAGS
+local PAUSED = false
+local STATUS = "Initializing"
+local noFruitStart = nil
 
 -- TIME
 local START_TIME = tick()
 local SESSION_TIME = tick()
 
--- FLAGS
-local PAUSED = false
-local HOPPING = false
-local STATUS = "Initializing"
-local noFruitStart = nil
+-- ================= CHARACTER =================
+local function getChar()
+    local c = LP.Character or LP.CharacterAdded:Wait()
+    return c, c:WaitForChild("HumanoidRootPart"), c:WaitForChild("Humanoid")
+end
+
+-- ================= AUTO TEAM (MARINES) =================
+task.spawn(function()
+    repeat task.wait() until PlayerGui:FindFirstChild("ChooseTeam", true)
+    local gui = PlayerGui:FindFirstChild("ChooseTeam", true)
+    if gui and gui:FindFirstChild("Marines", true) then
+        STATUS = "Choosing Marines"
+        pcall(function()
+            gui.Marines.Activate:Fire()
+        end)
+    end
+end)
 
 -- ================= GUI =================
-local gui = Instance.new("ScreenGui", LP.PlayerGui)
+local gui = Instance.new("ScreenGui", PlayerGui)
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.fromScale(0.36,0.26)
+frame.Size = UDim2.fromScale(0.35,0.26)
 frame.Position = UDim2.fromScale(0.32,0.05)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 
@@ -60,7 +78,7 @@ pauseBtn.Size = UDim2.fromScale(1,0.2)
 pauseBtn.Position = UDim2.fromScale(0,0.8)
 pauseBtn.Text = "⏸ PAUSE"
 pauseBtn.TextScaled = true
-pauseBtn.BackgroundColor3 = Color3.fromRGB(80,0,0)
+pauseBtn.BackgroundColor3 = Color3.fromRGB(90,0,0)
 pauseBtn.TextColor3 = Color3.new(1,1,1)
 
 pauseBtn.MouseButton1Click:Connect(function()
@@ -75,7 +93,6 @@ pauseBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- UI DISPLAY ONLY
 RunService.RenderStepped:Connect(function()
     label.Text =
         "Total: "..math.floor(tick()-START_TIME).."s\n"..
@@ -83,18 +100,40 @@ RunService.RenderStepped:Connect(function()
         "Status: "..STATUS
 end)
 
--- ================= UTILS =================
+-- ================= MOVEMENT =================
 local function flyTo(pos)
-    if PAUSED or HOPPING then return end
-    local d = (HRP.Position - pos).Magnitude
+    if PAUSED then return end
+    local _, hrp = getChar()
+    local d = (hrp.Position - pos).Magnitude
     TweenService:Create(
-        HRP,
-        TweenInfo.new(math.max(0.1,d/400)),
+        hrp,
+        TweenInfo.new(math.max(0.1, d/350)),
         {CFrame = CFrame.new(pos)}
     ):Play()
-    task.wait(d/400)
+    task.wait(d/350)
 end
 
+-- ================= COMBAT =================
+local function key(k)
+    VirtualInputManager:SendKeyEvent(true,k,false,game)
+    task.wait()
+    VirtualInputManager:SendKeyEvent(false,k,false,game)
+end
+
+local function click()
+    VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+end
+
+local function combo()
+    click()
+    key(Enum.KeyCode.Z)
+    key(Enum.KeyCode.X)
+    key(Enum.KeyCode.C)
+end
+
+-- ================= FRUIT =================
 local function findFruit()
     for _,v in pairs(Workspace:GetDescendants()) do
         if v:IsA("Tool") and v:FindFirstChild("Handle")
@@ -106,73 +145,125 @@ end
 
 local function storeFruit()
     for i=1,6 do
-        if PAUSED or HOPPING then return false end
-        local ok = pcall(function()
+        pcall(function()
             ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit")
         end)
-        if not ok then return false end
         task.wait(0.3)
     end
-    return true
 end
 
--- ================= SERVER HOP =================
-local function serverHop()
-    if HOPPING then return end
-    HOPPING = true
-    STATUS = "Server Hopping..."
+-- ================= FACTORY =================
+local function findFactory()
+    return Workspace:FindFirstChild("Factory")
+end
 
-    task.delay(1, function() -- تأخير صغير لضمان تحديث الـ UI
-        local servers = HttpService:JSONDecode(
-            game:HttpGet(
-                "https://games.roblox.com/v1/games/"..
-                game.PlaceId..
-                "/servers/Public?limit=100"
-            )
-        )
-
-        for _,s in pairs(servers.data) do
-            if s.playing < s.maxPlayers and s.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(
-                    game.PlaceId, s.id, LP
-                )
-                return
-            end
+-- ================= PIRATES =================
+local function findPirate()
+    if not Workspace:FindFirstChild("Enemies") then return end
+    for _,v in pairs(Workspace.Enemies:GetChildren()) do
+        if v:FindFirstChild("HumanoidRootPart")
+        and v:FindFirstChild("Humanoid")
+        and v.Name:lower():find("pirate") then
+            return v
         end
-    end)
+    end
+end
+
+-- ================= SERVER HOP (GUI) =================
+local function clickUI(ui)
+    local pos = ui.AbsolutePosition + (ui.AbsoluteSize / 2)
+    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,true,game,0)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0)
+end
+
+local function serverHopGUI(region)
+    STATUS = "Server Hop: "..region
+
+    -- open server list
+    for _,v in pairs(PlayerGui:GetDescendants()) do
+        if v:IsA("ImageButton") and v.Name:lower():find("server") then
+            clickUI(v)
+            task.wait(1)
+            break
+        end
+    end
+
+    -- search box
+    local search
+    for _,v in pairs(PlayerGui:GetDescendants()) do
+        if v:IsA("TextBox") then
+            search = v
+            break
+        end
+    end
+    if not search then return end
+
+    search.Text = region
+    task.wait(1)
+
+    -- join
+    for _,v in pairs(PlayerGui:GetDescendants()) do
+        if v:IsA("TextButton") and v.Text:lower():find("join") then
+            clickUI(v)
+            return
+        end
+    end
+end
+
+local function smartServerHop()
+    for i=1,MAX_JOIN_RETRY do
+        local region = REGIONS[(i-1)%#REGIONS+1]
+        STATUS = "Trying "..region.." ("..i..")"
+        serverHopGUI(region)
+        task.wait(JOIN_WAIT)
+    end
+    STATUS = "Server Hop Failed"
 end
 
 -- ================= MAIN LOOP =================
 task.spawn(function()
-    STATUS = "Fruit Searching"
-
     while true do
-        if PAUSED or HOPPING then
-            task.wait(0.5)
-            continue
-        end
+        if PAUSED then task.wait(1) continue end
 
         local fruit = findFruit()
 
         if fruit then
             STATUS = "Fruit Found: "..fruit.Name
             noFruitStart = nil
-
             flyTo(fruit.Handle.Position + Vector3.new(0,3,0))
             task.wait(0.4)
+            storeFruit()
 
-            if not storeFruit() then
-                serverHop()
-            end
         else
-            STATUS = "Fruit Searching"
-
+            STATUS = "Searching Fruit"
             if not noFruitStart then
                 noFruitStart = tick()
             end
 
-            if tick() - noFruitStart >= 20 then
-                serverHop()
+            if tick() - noFruitStart >= NO_FRUIT_TIMEOUT then
+                if game.PlaceId == SECOND_SEA then
+                    STATUS = "Searching Factory"
+                    local f = findFactory()
+                    if f and f:FindFirstChild("HumanoidRootPart") then
+                        flyTo(f.HumanoidRootPart.Position)
+                        repeat task.wait(0.3) combo() until not f.Parent
+                    else
+                        smartServerHop()
+                    end
+                elseif game.PlaceId == THIRD_SEA then
+                    STATUS = "Searching Pirates"
+                    local p = findPirate()
+                    if p then
+                        flyTo(p.HumanoidRootPart.Position)
+                        repeat task.wait(0.3) combo() until p.Humanoid.Health <= 0
+                    else
+                        smartServerHop()
+                    end
+                else
+                    smartServerHop()
+                end
+                noFruitStart = nil
             end
         end
 
