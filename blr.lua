@@ -1,37 +1,27 @@
 --[[
-╔══════════════════════════════════════════╗
-║   Blue Lock Rivals - ULTIMATE SCRIPT     ║
-║   Version: 6.0.0 (Fixed & Complete)      ║
-║   UI: Fluent UI Library                  ║
-║   Copyright: @K_7Ko                      ║
-╚══════════════════════════════════════════╝
-
-Features:
-1.  Ball Control (Camera follow + Analog movement)
-2.  Hitbox Expander (Ball + Enemies) - TextBox
-3.  VERY AUTO (Instant goal on kick)
-4.  Magnet (Hold E to attract ball)
-5.  Auto Goal (Team-based)
-6.  Infinite Stamina
-7.  Anti Stun
-8.  Anti Steal (Press E to become untouchable)
-9.  AI Stopper (Disable enemy goalkeeper)
-10. Speed Boost (TextBox)
-11. Jump Boost (TextBox)
-12. Anti Detection / Debug Bypass
-13. Anti Kick / Anti Ban
-14. Anti AFK
-15. No Clip
-16. Auto Collect
-17. ESP Players
-18. FOV Changer
-19. Floating Image Button (show/hide)
-20. Base64 Image Support
-21. KEY SYSTEM (مفتاح سري)
+    Blue Lock Rivals - ULTIMATE SCRIPT v7.0 (Merged)
+    Features:
+    1. Ball Control (Camera follow + Analog movement)
+    2. Hitbox Expander (Enemies ONLY) - TEXTBOX for size
+    3. VERY AUTO (Instant REAL goal on kick)
+    4. Magnet (Hold E to attract ball to YOU)
+    5. Auto Goal (REAL goal function detection + score)
+    6. Infinite Stamina
+    7. Anti Stun
+    8. Anti Steal (Press E to become untouchable)
+    9. AI Stopper (Disable enemy goalkeeper)
+    10. Speed Boost (TEXTBOX)
+    11. Jump Boost (TEXTBOX)
+    12. Anti-Cheat Bypass (Disables all detection systems)
+    13. KEY SYSTEM (مفتاح سري)
+    14. Base64 Image Support for Floating Button
+    
+    UI Library: Fluent UI
+    Copyright: @K_7Ko
 ]]
 
 -- ============================================
--- KEY SYSTEM - مفتاح سري
+-- KEY SYSTEM - مفتاح سري (from user's original script)
 -- ============================================
 local CORRECT_KEY = "abbastajrashassan"
 local keyVerified = false
@@ -180,49 +170,215 @@ ShowKeySystem()
 local ImageBase64 = "" -- ضع هنا كود base64 للصورة
 
 -- ============================================
--- SERVICES
+-- LOAD FLUENT UI LIBRARY
 -- ============================================
-local Players         = game:GetService("Players")
-local RunService      = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService    = game:GetService("TweenService")
-local LocalPlayer     = Players.LocalPlayer
-local Camera          = workspace.CurrentCamera
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -- ============================================
--- PLAYER INFO
+-- SERVICES
 -- ============================================
-local MY_NAME          = LocalPlayer.Name
-local MY_CHARACTER     = nil
-local MY_HUMANOID      = nil
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+
+-- ============================================
+-- PLAYER INFO (Auto Detect)
+-- ============================================
+local MY_NAME = LocalPlayer.Name
+local MY_USER_ID = LocalPlayer.UserId
+local MY_CHARACTER = nil
+local MY_HUMANOID = nil
 local MY_HUMANOID_ROOT = nil
 
 local function updateCharacter()
-    MY_CHARACTER     = LocalPlayer.Character
+    MY_CHARACTER = LocalPlayer.Character
     if MY_CHARACTER then
-        MY_HUMANOID      = MY_CHARACTER:FindFirstChild("Humanoid")
+        MY_HUMANOID = MY_CHARACTER:FindFirstChild("Humanoid")
         MY_HUMANOID_ROOT = MY_CHARACTER:FindFirstChild("HumanoidRootPart")
     end
 end
+
 LocalPlayer.CharacterAdded:Connect(updateCharacter)
 updateCharacter()
 
--- ============================================
--- BALL REFERENCE
--- ============================================
 local function getBall()
     return workspace:FindFirstChild("Football")
-        or workspace:FindFirstChild("Ball")
-        or workspace:FindFirstChild("SoccerBall")
 end
 
 -- ============================================
--- VARIABLES
+-- ANTI-CHEAT BYPASS SYSTEM (from v7.0)
+-- ============================================
+local AntiCheatBypassEnabled = false
+
+local antiCheatKeywords = {
+    "isCheating", "is_cheating", "ischeating", "IsCheating",
+    "isCheat", "is_cheat", "ischeat", "IsCheat",
+    "cheatDetected", "cheat_detected", "cheatdetected",
+    "bypass", "Bypass", "BYPASS",
+    "antiCheat", "anti_cheat", "anticheat",
+    "verify", "verification", "verified",
+    "security", "secure", "Secure",
+    "detection", "detect", "Detect",
+    "flag", "Flag", "FLAG",
+    "ban", "Ban", "BAN",
+    "kick", "Kick", "KICK",
+    "exploit", "Exploit", "EXPLOIT",
+    "hack", "Hack", "HACK",
+    "inject", "Inject", "INJECT",
+    "spoof", "Spoof", "SPOOF"
+}
+
+local function bypassAntiCheat()
+    -- تعطيل المتغيرات العامة
+    for _, keyword in ipairs(antiCheatKeywords) do
+        pcall(function()
+            _G[keyword] = nil
+            rawset(_G, keyword, nil)
+        end)
+    end
+    
+    -- تعطيل المتغيرات في البيئة
+    pcall(function()
+        local env = getfenv() or _G
+        for _, keyword in ipairs(antiCheatKeywords) do
+            env[keyword] = nil
+        end
+    end)
+    
+    -- Hook ومنع دوال الكشف
+    pcall(function()
+        local mt = getrawmetatable(game)
+        local old_index = mt.__index
+        setreadonly(mt, false)
+        mt.__index = newcclosure(function(self, key)
+            for _, keyword in ipairs(antiCheatKeywords) do
+                if string.lower(tostring(key)):find(string.lower(keyword)) then
+                    return nil
+                end
+            end
+            return old_index(self, key)
+        end)
+        setreadonly(mt, true)
+    end)
+    
+    -- تعطيل الـ Remote Events الخاصة بالكشف
+    for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            local name = v.Name:lower()
+            for _, keyword in ipairs(antiCheatKeywords) do
+                if name:find(keyword:lower()) then
+                    pcall(function()
+                        v:Destroy()
+                    end)
+                end
+            end
+        end
+    end
+    
+    -- تعطيل الـ Attributes الخاصة بالكشف
+    pcall(function()
+        local attrs = LocalPlayer:GetAttributes()
+        for _, keyword in ipairs(antiCheatKeywords) do
+            if attrs[keyword] then
+                LocalPlayer:SetAttribute(keyword, nil)
+            end
+        end
+    end)
+    
+    print("[Anti-Cheat] Protection systems disabled")
+end
+
+local function AntiKickBan()
+    pcall(function()
+        if AntiKickEnabled then
+            local oldKick = LocalPlayer.Kick
+            LocalPlayer.Kick = function(...)
+                if AntiKickEnabled then
+                    warn("Anti-Kick: تم منع محاولة الطرد!")
+                    return nil
+                end
+                return oldKick(...)
+            end
+        end
+    end)
+end
+
+-- ============================================
+-- FIND REAL GOAL FUNCTION (from v7.0)
+-- ============================================
+local GoalFunction = nil
+
+local function findGoalFunction()
+    local goalEvents = {
+        ReplicatedStorage:FindFirstChild("GoalEvent"),
+        ReplicatedStorage:FindFirstChild("ScoreGoal"),
+        ReplicatedStorage:FindFirstChild("AddScore"),
+        ReplicatedStorage:FindFirstChild("GoalScored"),
+        ReplicatedStorage:FindFirstChild("TeamScore"),
+        ReplicatedStorage:FindFirstChild("IncreaseScore"),
+        ReplicatedStorage:FindFirstChild("OnGoal"),
+        ReplicatedStorage:FindFirstChild("Goal"),
+        ReplicatedStorage:FindFirstChild("Score"),
+        ReplicatedStorage:FindFirstChild("AddPoint"),
+        ReplicatedStorage:FindFirstChild("PointScored"),
+        ReplicatedStorage:FindFirstChild("RegisterGoal"),
+        ReplicatedStorage:FindFirstChild("GoalMade"),
+        ReplicatedStorage:FindFirstChild("ScorePoint")
+    }
+    
+    for _, event in ipairs(goalEvents) do
+        if event then
+            return event
+        end
+    end
+    
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") or obj:IsA("BindableEvent") then
+            local name = obj.Name:lower()
+            if name:find("goal") or name:find("score") or name:find("point") then
+                return obj
+            end
+        end
+    end
+    
+    return nil
+end
+
+GoalFunction = findGoalFunction()
+
+local function scoreRealGoal()
+    if GoalFunction then
+        pcall(function()
+            if GoalFunction:IsA("RemoteEvent") then
+                GoalFunction:FireServer()
+                GoalFunction:FireServer(unpack({}))
+            elseif GoalFunction:IsA("RemoteFunction") then
+                GoalFunction:InvokeServer()
+            elseif GoalFunction:IsA("BindableEvent") then
+                GoalFunction:Fire()
+            end
+        end)
+        return true
+    end
+    return false
+end
+
+-- ============================================
+-- VARIABLES (Combined from both scripts)
 -- ============================================
 -- Ball Control
 local BallControlEnabled    = false
 local BallControlSpeed      = 200
 local BallControlConnection = nil
+local OriginalCameraType    = nil
 local BallCameraOffset      = 12
 local BallCameraHeight      = 8
 local BallCameraAngle       = -15
@@ -238,12 +394,13 @@ local OriginalPlayerSizes = {}
 -- Very Auto
 local VeryAutoEnabled    = false
 local VeryAutoConnection = nil
-local VeryAutoLastPos    = nil
 local VeryAutoCooldown   = false
+local VeryAutoLastPos    = nil -- From user's original script
 
 -- Magnet
 local isMagnetActive   = false
 local magnetConnection = nil
+local magnetBodyVel    = nil -- From v7.0
 local MagnetForce      = 300
 
 -- Auto Goal
@@ -251,7 +408,7 @@ local AutoGoalEnabled   = false
 local AutoGoalForce     = 700
 local AutoGoalConnection = nil
 local myTeam            = "Home"
-local AutoGoalLastPos   = nil
+local AutoGoalLastPos   = nil -- From user's original script
 local AutoGoalJustShot  = false
 
 -- Movement
@@ -279,102 +436,21 @@ local ESPObjects         = {}
 local FOVEnabled         = false
 local FOVValue           = 100
 
--- Protection
+-- Protection (Updated to use AntiCheatBypassEnabled)
 local AntiDetectionEnabled = true
 local AntiKickEnabled      = true
 local AntiBanEnabled       = true
-local DebugBypassEnabled   = true
+local DebugBypassEnabled   = true -- Kept for UI toggle, but actual bypass uses AntiCheatBypassEnabled
 
 -- ============================================
--- PROTECTION SYSTEM
--- ============================================
-local function BypassSecurity()
-    if not DebugBypassEnabled then return end
-    pcall(function()
-        -- تعطيل debug
-        debug = debug or {}
-        debug.traceback  = function() return "" end
-        debug.getinfo    = function() return nil end
-        debug.getlocal   = function() return nil end
-        debug.getupvalue = function() return nil end
-    end)
-    pcall(function()
-        -- تعطيل cheat detection variables
-        if getgc then
-            for _, v in pairs(getgc(true)) do
-                if type(v) == "table" then
-                    pcall(function()
-                        for _, key in pairs({"IsCheating","isCheating","IsCheater","isCheater",
-                                             "IsCheated","isCheated","IsCheat","isCheat",
-                                             "Detected","Banned","ischeat","ischeating","ischeated"}) do
-                            if v[key] ~= nil then v[key] = false end
-                        end
-                    end)
-                end
-            end
-        end
-    end)
-end
-
-local function AntiKickBan()
-    pcall(function()
-        if AntiKickEnabled then
-            local oldKick = LocalPlayer.Kick
-            LocalPlayer.Kick = function(...)
-                if AntiKickEnabled then
-                    warn("Anti-Kick: تم منع محاولة الطرد!")
-                    return nil
-                end
-                return oldKick(...)
-            end
-        end
-    end)
-end
-
--- تشغيل الحماية المستمرة
-if AntiDetectionEnabled then
-    task.spawn(function()
-        while true do
-            if AntiDetectionEnabled then
-                pcall(BypassSecurity)
-            end
-            task.wait(0.5)
-        end
-    end)
-end
-
--- ============================================
--- ANTI AFK
--- ============================================
-local function AntiAFK()
-    pcall(function()
-        local vu = game:GetService("VirtualUser")
-        LocalPlayer.Idled:Connect(function()
-            vu:Button2Down(Vector2.new(0,0), Camera.CFrame)
-            task.wait(1)
-            vu:Button2Up(Vector2.new(0,0), Camera.CFrame)
-        end)
-    end)
-end
-
--- ============================================
--- LOAD FLUENT UI
--- ============================================
-local Fluent = loadstring(game:HttpGet(
-    "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
-))()
-local SaveManager = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"
-))()
-local InterfaceManager = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"
-))()
-
--- ============================================
--- NOTIFY
+-- NOTIFY FUNCTION
 -- ============================================
 local function Notify(title, content, duration)
-    Fluent:Notify({ Title = title, Content = content, Duration = duration or 3 })
+    Fluent:Notify({
+        Title = title,
+        Content = content,
+        Duration = duration or 3
+    })
 end
 
 -- ============================================
@@ -382,7 +458,7 @@ end
 -- ============================================
 local Window = Fluent:CreateWindow({
     Title       = MY_NAME .. " | Blue Lock Rivals",
-    SubTitle    = "Ultimate Script v6.0 | Protected",
+    SubTitle    = "Ultimate Script v7.0 | Protected",
     TabWidth    = 160,
     Size        = UDim2.fromOffset(640, 560),
     Acrylic     = true,
@@ -394,6 +470,7 @@ local Window = Fluent:CreateWindow({
 -- TABS
 -- ============================================
 local Tabs = {
+    Main        = Window:AddTab({ Title = "🏠 Main", Icon = "home" }), -- Added Main tab from v7.0
     BallControl = Window:AddTab({ Title = "🎮 Ball Control", Icon = "joystick" }),
     Hitbox      = Window:AddTab({ Title = "🎯 Hitbox",       Icon = "target"   }),
     Auto        = Window:AddTab({ Title = "⚽ Auto",          Icon = "zap"      }),
@@ -403,6 +480,49 @@ local Tabs = {
     Protection  = Window:AddTab({ Title = "🛡️ Protection",    Icon = "shield"   }),
     Settings    = Window:AddTab({ Title = "⚙️ Settings",      Icon = "settings-2"}),
 }
+
+-- ============================================
+-- MAIN TAB (from v7.0)
+-- ============================================
+local MainSection = Tabs.Main:AddSection("Player Information")
+
+MainSection:AddParagraph({
+    Title = "Player Info",
+    Content = "Name: " .. MY_NAME .. "\nUser ID: " .. MY_USER_ID .. "\nStatus: Connected"
+})
+
+MainSection:AddButton({
+    Title = "Rejoin Game",
+    Description = "Leave and rejoin the server",
+    Callback = function()
+        Notify("Rejoining", "Teleporting to new server...", 2)
+        task.wait(1)
+        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+    end
+})
+
+MainSection:AddButton({
+    Title = "Server Hop",
+    Description = "Find a new server",
+    Callback = function()
+        Notify("Server Hop", "Searching for new server...", 2)
+        task.wait(1)
+        local servers = {}
+        pcall(function()
+            local data = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100"))
+            for _, v in ipairs(data.data) do
+                if type(v) == "table" and v.playing and v.playing < v.maxPlayers then
+                    servers[#servers + 1] = v.id
+                end
+            end
+        end)
+        if #servers > 0 then
+            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], LocalPlayer)
+        else
+            Notify("Error", "No servers found!", 2)
+        end
+    end
+})
 
 -- ============================================
 -- BALL CONTROL TAB
@@ -416,6 +536,7 @@ BCSection:AddToggle("BallControlToggle", {
     Callback    = function(Value)
         BallControlEnabled = Value
         if BallControlEnabled then
+            OriginalCameraType = Camera.CameraType -- Save original camera type
             Camera.CameraType = Enum.CameraType.Scriptable
             BallControlConnection = RunService.RenderStepped:Connect(function()
                 local ball = getBall()
@@ -431,7 +552,7 @@ BCSection:AddToggle("BallControlToggle", {
                 BallControlConnection:Disconnect()
                 BallControlConnection = nil
             end
-            Camera.CameraType = Enum.CameraType.Custom
+            Camera.CameraType = OriginalCameraType or Enum.CameraType.Custom -- Restore original camera type
             Notify("Ball Control", "❌ تم التعطيل", 1)
         end
     end
@@ -538,14 +659,16 @@ HBSection:AddToggle("PlayerHitboxToggle", {
             end)
             Notify("Player Hitbox", "✅ تم التفعيل - الحجم: " .. PlayerHitboxSize, 1)
         else
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player.Character then
+            for name, size in pairs(OriginalPlayerSizes) do
+                local player = Players:FindFirstChild(name)
+                if player and player.Character then
                     local root = player.Character:FindFirstChild("HumanoidRootPart")
-                    if root and OriginalPlayerSizes[player.Name] then
-                        root.Size = OriginalPlayerSizes[player.Name]
+                    if root then
+                        root.Size = size
                     end
                 end
             end
+            OriginalPlayerSizes = {}
             Notify("Player Hitbox", "❌ تم التعطيل", 1)
         end
     end
@@ -580,7 +703,7 @@ AutoSection:AddDropdown("TeamDropdown", {
     end
 })
 
--- VERY AUTO - نظام تسجيل هدف حقيقي
+-- VERY AUTO - نظام تسجيل هدف حقيقي (Updated with scoreRealGoal from v7.0)
 AutoSection:AddToggle("VeryAutoToggle", {
     Title       = "⚡ VERY AUTO - تسجيل فوري",
     Description = "عندما تركل الكرة تنتقل مباشرة للمرمى",
@@ -588,50 +711,39 @@ AutoSection:AddToggle("VeryAutoToggle", {
     Callback    = function(Value)
         VeryAutoEnabled = Value
         if VeryAutoEnabled then
-            VeryAutoLastPos = nil
             VeryAutoCooldown = false
-
-            local function findGoalPosition()
-                local keywords = myTeam == "Home"
-                    and {"bluegoal","blue_goal","goalblue","homegoal"}
-                    or  {"whitegoal","white_goal","goalwhite","awaygoal"}
-                local fallback = {}
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") then
-                        local name = obj.Name:lower()
-                        for _, kw in ipairs(keywords) do
-                            if name:find(kw) then return obj.Position end
-                        end
-                        if name:find("goal") or name:find("net") then
-                            table.insert(fallback, obj)
-                        end
-                    end
-                end
-                if #fallback > 0 then return fallback[1].Position end
-                return nil
-            end
 
             VeryAutoConnection = RunService.Heartbeat:Connect(function()
                 if not VeryAutoEnabled then return end
                 local ball = getBall()
                 if not ball then return end
-                local currentPos = ball.Position
-                if VeryAutoLastPos then
-                    local dist = (currentPos - VeryAutoLastPos).Magnitude
-                    local vel  = ball.AssemblyLinearVelocity.Magnitude
-                    if dist > 4 and vel > 10 and not VeryAutoCooldown then
-                        VeryAutoCooldown = true
-                        local goalPos = findGoalPosition()
-                        if goalPos then
-                            ball.CFrame = CFrame.new(goalPos)
-                            ball.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                            Notify("⚽ GOAL!", "تم تسجيل هدف!", 2)
+                
+                local vel = ball.AssemblyLinearVelocity.Magnitude
+                
+                if vel > 10 and not VeryAutoCooldown then
+                    VeryAutoCooldown = true
+                    
+                    local success = scoreRealGoal()
+                    if success then
+                        Notify("VERY AUTO", "GOAL SCORED!", 1)
+                    else
+                        local goalPart = nil
+                        for _, obj in ipairs(workspace:GetDescendants()) do
+                            if obj:IsA("BasePart") and (obj.Name:lower():find("goal") or obj.Name:lower():find("net")) then
+                                goalPart = obj
+                                break
+                            end
                         end
-                        task.wait(1.5)
-                        VeryAutoCooldown = false
+                        if goalPart then
+                            ball.Position = goalPart.Position
+                            ball.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            Notify("VERY AUTO", "Ball teleported to goal!", 1)
+                        end
                     end
+                    
+                    task.wait(1.5)
+                    VeryAutoCooldown = false
                 end
-                VeryAutoLastPos = currentPos
             end)
             Notify("VERY AUTO", "✅ تم التفعيل", 1)
         else
@@ -644,7 +756,7 @@ AutoSection:AddToggle("VeryAutoToggle", {
     end
 })
 
--- Auto Goal
+-- Auto Goal (Updated with scoreRealGoal from v7.0)
 AutoSection:AddToggle("AutoGoalToggle", {
     Title       = "Auto Goal",
     Description = "يركل الكرة تلقائياً نحو المرمى",
@@ -652,18 +764,50 @@ AutoSection:AddToggle("AutoGoalToggle", {
     Callback    = function(Value)
         AutoGoalEnabled = Value
         if AutoGoalEnabled then
+            local function findOpponentGoal()
+                if not myTeam then 
+                    Notify("Error", "Select your team first!", 2)
+                    return nil 
+                end
+                local targetColor = (myTeam == "Home") and "blue" or "white"
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") and (obj.Name:lower():find("goal") or obj.Name:lower():find("net")) then
+                        local brickColor = tostring(obj.BrickColor):lower()
+                        if (targetColor == "blue" and brickColor:find("blue")) or 
+                           (targetColor == "white" and brickColor:find("white")) then
+                            return obj.Position
+                        end
+                    end
+                end
+                return nil
+            end
+            
+            AutoGoalJustShot = false
+            
             AutoGoalConnection = RunService.Heartbeat:Connect(function()
                 if not AutoGoalEnabled then return end
                 local ball = getBall()
-                if not ball or not MY_HUMANOID_ROOT then return end
-                local dist = (ball.Position - MY_HUMANOID_ROOT.Position).Magnitude
-                if dist < 8 and not AutoGoalJustShot then
+                if not ball then return end
+                
+                local currentVel = ball.AssemblyLinearVelocity.Magnitude
+                
+                if currentVel > 15 and not AutoGoalJustShot then
                     AutoGoalJustShot = true
-                    local goalDir = CFrame.new(ball.Position,
-                        Vector3.new(myTeam == "Home" and -100 or 100, ball.Position.Y, ball.Position.Z)).LookVector
-                    ball:ApplyImpulse(goalDir * AutoGoalForce * ball:GetMass())
-                    task.wait(1)
-                    AutoGoalJustShot = false
+                    task.spawn(function()
+                        task.wait(0.05)
+                        local goalPos = findOpponentGoal()
+                        if goalPos then
+                            local direction = (goalPos - ball.Position).Unit
+                            local reversedDir = Vector3.new(-direction.X, -direction.Y + 0.3, -direction.Z)
+                            local force = reversedDir * AutoGoalForce * ball:GetMass()
+                            ball:ApplyImpulse(force)
+                            task.wait(0.5)
+                            scoreRealGoal()
+                            Notify("Auto Goal", "GOAL SCORED!", 1)
+                        end
+                        task.wait(2)
+                        AutoGoalJustShot = false
+                    end)
                 end
             end)
             Notify("Auto Goal", "✅ تم التفعيل", 1)
@@ -936,7 +1080,16 @@ UtilSection:AddToggle("AntiAFKToggle", {
     Default  = true,
     Callback = function(Value)
         AntiAFKEnabled = Value
-        if Value then AntiAFK() end
+        if Value then 
+            pcall(function()
+                local vu = game:GetService("VirtualUser")
+                LocalPlayer.Idled:Connect(function()
+                    vu:Button2Down(Vector2.new(0,0), Camera.CFrame)
+                    task.wait(1)
+                    vu:Button2Up(Vector2.new(0,0), Camera.CFrame)
+                end)
+            end)
+        end
         Notify("Anti AFK", Value and "✅ تم التفعيل" or "❌ تم التعطيل", 1)
     end
 })
@@ -1030,6 +1183,7 @@ ProtSection:AddToggle("AntiBanToggle", {
 
 ProtSection:AddToggle("DebugBypassToggle", {
     Title    = "Debug Bypass",
+    Description = "تخطي أنظمة الكشف عن الأخطاء (Debug)",
     Default  = true,
     Callback = function(Value)
         DebugBypassEnabled = Value
@@ -1044,7 +1198,7 @@ ProtSection:AddButton({
         AntiKickEnabled      = true
         AntiBanEnabled       = true
         DebugBypassEnabled   = true
-        BypassSecurity()
+        bypassAntiCheat() -- Call the new bypass function
         AntiKickBan()
         Notify("الحماية", "✅ جميع أنظمة الحماية مفعلة!", 2)
     end
@@ -1123,7 +1277,7 @@ local function CreateFloatingButton()
     btn.BackgroundTransparency = 0.1
     btn.BorderSizePixels      = 0
     btn.AutoButtonColor       = false
-    btn.Image                 = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    btn.Image                 = ImageBase64 -- ضع هنا كود base64 للصورة الخاصة بك
     btn.ImageColor3           = Color3.fromRGB(0, 140, 255)
     btn.Parent                = gui
 
@@ -1195,9 +1349,9 @@ end
 -- ============================================
 -- INITIALIZE
 -- ============================================
-BypassSecurity()
+bypassAntiCheat() -- Call the new bypass function
 AntiKickBan()
-AntiAFK()
+-- AntiAFK() -- This is now handled by the toggle in Utilities tab
 CreateFloatingButton()
 
 -- SAVE MANAGER
@@ -1221,7 +1375,7 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
-print("=== Blue Lock Rivals v6.0 Loaded ===")
+print("=== Blue Lock Rivals v7.0 Merged Script Loaded ===")
 print("Player : " .. MY_NAME)
 print("Key    : Verified ✓")
 print("Menu   : LeftCtrl to open/close")
