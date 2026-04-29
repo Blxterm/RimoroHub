@@ -394,6 +394,7 @@ local NPCs = {
     Valentine = GetServiceNPC("ValentineMerchantNPC"),
     InfiniteTower = GetServiceNPC("InfiniteTowerMerchantNPC"),
     BossRush = GetServiceNPC("BossRushMerchantNPC"),
+    
   }
 }
 
