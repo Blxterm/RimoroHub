@@ -1,64 +1,21 @@
+///--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+-- External Loadstring Removed for Sea 2 Compatibility
 
--- [[ FOURHUB FLUENT WRAPPER ]]
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+-- [[ ANTI-KICK BYPASS ]]
+local Plr = game:GetService("Players").LocalPlayer
+local oldKick
+oldKick = hookmetamethod(Plr, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if self == Plr and method == "Kick" then
+        warn("Blocked Kick Attempt!")
+        return nil
+    end
+    return oldKick(self, ...)
+end)
 
-local Window = Fluent:CreateWindow({
-    Title = "FourHub | Sailor Piece",
-    SubTitle = "Fluent Edition",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(480, 360),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
-
-local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    Combat = Window:AddTab({ Title = "Combat", Icon = "swords" }),
-    Crystal = Window:AddTab({ Title = "Crystal Defense", Icon = "shield" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
-}
-
--- Floating Icon
-local function CreateFloatingIcon()
-    local ScreenGui = Instance.new("ScreenGui")
-    local ImageButton = Instance.new("ImageButton")
-    local UICorner = Instance.new("UICorner")
-    ScreenGui.Name = "FourHubIcon"; ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui"); ScreenGui.ResetOnSpawn = false
-    ImageButton.Parent = ScreenGui; ImageButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30); ImageButton.Position = UDim2.new(0.05, 0, 0.4, 0); ImageButton.Size = UDim2.new(0, 45, 0, 45); ImageButton.Image = "rbxassetid://10723343321"; ImageButton.Draggable = true
-    UICorner.CornerRadius = UDim.new(1, 0); UICorner.Parent = ImageButton
-    task.spawn(function() while true do local tween = game:GetService("TweenService"):Create(ImageButton, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = ImageButton.Position + UDim2.new(0, 0, 0, 6)}); tween:Play(); task.wait(2.4) end end)
-    ImageButton.MouseButton1Click:Connect(function() Window:Minimize() end)
-end
-CreateFloatingIcon()
-
--- [[ BRIDGE TO ORIGINAL LOGIC ]]
--- We define the global tables the original script uses
-getgenv().Toggles = {}
-getgenv().Options = {}
-
--- Create Fluent UI elements and link them to the global tables
-local AutoM1 = Tabs.Main:AddToggle("AutoM1", { Title = "Auto Attack", Default = false })
-AutoM1:OnChanged(function() getgenv().Toggles.AutoM1 = {Value = AutoM1.Value} end)
-
-local AutoCrystal = Tabs.Crystal:AddToggle("AutoCrystal", { Title = "Auto Crystal Defense", Default = false })
-AutoCrystal:OnChanged(function() getgenv().Toggles.AutoCrystalDefense = {Value = AutoCrystal.Value} end)
-
-local AutoTower = Tabs.Crystal:AddToggle("AutoTower", { Title = "Auto Infinite Tower", Default = false })
-AutoTower:OnChanged(function() getgenv().Toggles.AutoInfiniteTower = {Value = AutoTower.Value} end)
-
--- Support for Sea 2
-local supported_ids = {98826438856089, 130167267952199}
-local is_supported = false
-for _, id in pairs(supported_ids) do if game.PlaceId == id then is_supported = true break end end
-
--- [[ ORIGINAL CODE EXECUTION ]]
--- We wrap the original code in a pcall to prevent it from crashing the UI
-task.spawn(function()
-    local success, err = pcall(function()
-        if getgenv().FourHub_Running then
+if getgenv().FourHub_Running then
     warn("Script already running!")
     return
 end
@@ -454,7 +411,6 @@ local NPCs = {
     Valentine = GetServiceNPC("ValentineMerchantNPC"),
     InfiniteTower = GetServiceNPC("InfiniteTowerMerchantNPC"),
     BossRush = GetServiceNPC("BossRushMerchantNPC"),
-    
   }
 }
 
@@ -487,6 +443,7 @@ local IslandCrystals = {
     ["Jungle"] = workspace:FindFirstChild("JungleIsland") and workspace.JungleIsland:FindFirstChild("SpawnPointCrystal_Jungle"),
     ["Bizarre"] = workspace:FindFirstChild("BizarreIsland") and workspace.BizarreIsland:FindFirstChild("SpawnPointCrystal_Bizarre"),
     ["Punch"] = workspace:FindFirstChild("PunchIsland") and workspace.PunchIsland:FindFirstChild("SpawnPointCrystal_Punch"),
+
     ["Desert"] = workspace:FindFirstChild("DesertIsland") and workspace.DesertIsland:FindFirstChild("SpawnPointCrystal_Desert"),
     ["Snow"] = workspace:FindFirstChild("SnowIsland") and workspace.SnowIsland:FindFirstChild("SpawnPointCrystal_Snow"),
     ["Sailor"] = workspace:FindFirstChild("SailorIsland") and workspace.SailorIsland:FindFirstChild("SpawnPointCrystal_Sailor"),
@@ -588,8 +545,6 @@ if Modules.TimedConfig and Modules.TimedConfig.Bosses then
         local tpName = data.spawnLocation:gsub(" Island", ""):gsub(" Station", "")
         if data.spawnLocation == "Hueco Mundo Island" then tpName = "HuecoMundo" end
         if data.spawnLocation == "Judgement Island" then tpName = "Judgement" end
-        if data.spawnLocation == "Bizarre Island" then tpName = "Bizarre" end
-        if data.spawnLocation == "Punch Island" then tpName = "Punch" end
         
         Shared.BossTIMap[data.displayName] = tpName
     end
@@ -610,9 +565,9 @@ for bossInternalName, _ in pairs(Modules.BossConfig.Bosses) do
     local clean = bossInternalName:gsub("Boss$", "")
     table.insert(Tables.AllBossList, clean)
 end
-table.insert(Tables.AllBossList, "The World")
-table.insert(Tables.AllBossList, "Cosmic Being")
 table.sort(Tables.AllBossList)
+    table.insert(Tables.AllBossList, "The World")
+    table.insert(Tables.AllBossList, "Cosmic Being")
 
 for itemName in pairs(MerchantItemList) do
   table.insert(Tables.MerchantList, itemName)
@@ -1732,9 +1687,7 @@ local function GetNearestIsland(targetPos, npcName)
 end
 
 local function UpdateNPCLists()
-    local world2Mobs = {"Strong Fighter", "Strongest Bandit"}
-    for _, m in pairs(world2Mobs) do if not table.find(Tables.MobList, m) then table.insert(Tables.MobList, m) end end
-    local specialMobs = {"ThiefBoss", "MonkeyBoss", "DesertBoss", "SnowBoss", "PandaMiniBoss"}
+    local specialMobs = {"ThiefBoss", "MonkeyBoss", "DesertBoss", "SnowBoss", "PandaMiniBoss", "Strong Fighter", "Strongest Bandit"}
     
     local currentList = {}
     for _, name in pairs(Tables.MobList) do currentList[name] = true end
@@ -3981,24 +3934,24 @@ local function Func_AutoDungeon()
   end
 end
 
---[[ CRYSTAL DEFENSE ]]
+
+--[[ DEFENSE CRYSTAL LOGIC ]]
 local function Func_AutoCrystalDefense()
     while Toggles.AutoCrystalDefense.Value do
         task.wait(0.1)
         local npcsFolder = workspace:FindFirstChild("NPCs")
-        local isInCrystal = npcsFolder and game.PlaceId == 98826438856089
-        if isInCrystal then
+        if game.PlaceId == 98826438856089 or true then -- Forced true for testing in any place if needed
             if not Shared.Farm then continue end
-            local char = GetCharacter()
+            local char = Plr.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not char or not root then continue end
+            
             local bestTarget = nil
             local bestDist = math.huge
             for _, npc in pairs(npcsFolder:GetChildren()) do
-                if npc:IsA("Model") then
-                    local humanoid = npc:FindFirstChildOfClass("Humanoid")
+                if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
                     local hrp = npc:FindFirstChild("HumanoidRootPart")
-                    if humanoid and hrp and humanoid.Health > 0 then
+                    if hrp then
                         local dist = (root.Position - hrp.Position).Magnitude
                         if dist < bestDist then
                             bestDist = dist
@@ -4007,20 +3960,18 @@ local function Func_AutoCrystalDefense()
                     end
                 end
             end
+            
             if bestTarget then
                 Shared.Target = bestTarget
                 local targetPos = bestTarget:GetPivot().Position
                 local height = Options.FarmHeight and Options.FarmHeight.Value or 10
-                local finalPos = targetPos + Vector3.new(0, height, 0)
-                root.CFrame = CFrame.new(finalPos, targetPos)
+                root.CFrame = CFrame.new(targetPos + Vector3.new(0, height, 0), targetPos)
                 root.Velocity = Vector3.zero
                 if tick() - Shared.LastM1 >= 0.1 then
                     Remotes.M1:FireServer()
                     Shared.LastM1 = tick()
                 end
             end
-        else
-            -- Auto Join Logic if needed
         end
     end
 end
@@ -5726,21 +5677,25 @@ TB_Tabs.Dungeon.T1:AddToggle("AutoDungeon", {
   Default = false,
 })
 
-TB_Tabs.Dungeon.T1:AddToggle("AutoCrystalDefense", {
-    Text = "Auto Crystal Defense",
-    Default = false,
-    Tooltip = "Supports Crystal Defense (Place ID: 98826438856089)"
-})
 
-TB_Tabs.Autofarm.T1:AddSlider("FarmHeight", {
-    Text = "Farm Height (Above Mobs)",
-    Default = 10,
-    Min = 5,
-    Max = 50,
-    Rounding = 1
-})
+    TB_Tabs.Dungeon.T1:AddToggle("AutoCrystalDefense", {
+        Text = "Auto Crystal Defense",
+        Default = false,
+        Tooltip = "Supports Crystal Defense (Place ID: 98826438856089)"
+    })
+    Toggles.AutoCrystalDefense:OnChanged(function(state)
+        Thread("AutoCrystalDefense", Func_AutoCrystalDefense, state)
+    end)
+    
+    TB_Tabs.Autofarm.T1:AddSlider("FarmHeight", {
+        Text = "Farm Height (Above Mobs)",
+        Default = 10,
+        Min = 5,
+        Max = 50,
+        Rounding = 1
+    })
 
-TB_Tabs.Dungeon.T1:AddToggle("AutoInfiniteTower", {
+    TB_Tabs.Dungeon.T1:AddToggle("AutoInfiniteTower", {
   Text = "Auto Infinite Tower",
   Default = false,
 })
@@ -6152,54 +6107,54 @@ TB_Tabs.Puzzle.T2:AddToggle("AutoQuestline", {
     Default = false,
 })
 
--- UI Connection Handled by Fluent
+Toggles.SendWebhook:OnChanged(function(state)
     Thread("WebhookLoop", Func_WebhookLoop, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.LevelFarm:OnChanged(function(state)
     if not state then Shared.QuestNPC = "" end
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoTitle:OnChanged(function(state)
     if state and #Tables.UnlockedTitle == 0 then
         Remotes.TitleUnequip:FireServer()
     end
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ObserHaki:OnChanged(function(state)
     Thread("AutoHaki", Func_AutoHaki, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ArmHaki:OnChanged(function(state)
     Thread("AutoHaki", Func_AutoHaki, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ConquerorHaki:OnChanged(function(state)
     Thread("AutoHaki", Func_AutoHaki, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoM1:OnChanged(function(state)
     Thread("AutoM1", SafeLoop("Auto M1", Func_AutoM1), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.KillAura:OnChanged(function(state)
     Thread("KillAura", Func_KillAura, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoSkill:OnChanged(function(state)
     Thread("AutoSkill", SafeLoop("Auto Skill", Func_AutoSkill), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoStats:OnChanged(function(state)
     Thread("AutoStats", SafeLoop("Auto Stats", Func_AutoStats), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoCombo:OnChanged(function(state)
     if not state then Shared.ComboIdx = 1 end
     Thread("AutoCombo", SafeLoop("Skill Combo", Func_AutoCombo), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoAscend:OnChanged(function(state)
     if state then
         Remotes.ReqAscend:InvokeServer()
     else
@@ -6208,9 +6163,9 @@ end)
     end
 end)
 
--- UI Connection Handled by Fluent
--- UI Connection Handled by Fluent
--- UI Connection Handled by Fluent
+Toggles.AutoTrait:OnChanged(EnsureRollManager)
+Toggles.AutoRace:OnChanged(EnsureRollManager)
+Toggles.AutoClan:OnChanged(EnsureRollManager)
 
 Options.SelectedTrait:OnChanged(function()
     SyncTraitAutoSkip()
@@ -6240,68 +6195,64 @@ end)
 
 task.spawn(Func_AutoTrade)
 
--- UI Connection Handled by Fluent
+Toggles.AutoSpec:OnChanged(function(state)
     Thread("AutoSpecPassive", SafeLoop("Spec Passive", AutoSpecPassiveLoop), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoRollStats:OnChanged(function(state)
     Thread("AutoRollStats", SafeLoop("Stat Roll", AutoRollStatsLoop), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoSkillTree:OnChanged(function(state)
     Thread("AutoSkillTree", SafeLoop("Skill Tree", AutoSkillTreeLoop), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ArtifactMilestone:OnChanged(function(state)
     Thread("ArtifactMilestone", Func_ArtifactMilestone, state)
 end)
 
--- UI Connection Handled by Fluent Thread("AutoEnchant", SafeLoop("Enchant", function() AutoUpgradeLoop("Enchant") end), s) end)
--- UI Connection Handled by Fluent Thread("AutoEnchantAll", SafeLoop("EnchantAll", function() AutoUpgradeLoop("Enchant") end), s) end)
--- UI Connection Handled by Fluent Thread("AutoBlessing", SafeLoop("Blessing", function() AutoUpgradeLoop("Blessing") end), s) end)
--- UI Connection Handled by Fluent Thread("AutoBlessingAll", SafeLoop("BlessingAll", function() AutoUpgradeLoop("Blessing") end), s) end)
+Toggles.AutoEnchant:OnChanged(function(s) Thread("AutoEnchant", SafeLoop("Enchant", function() AutoUpgradeLoop("Enchant") end), s) end)
+Toggles.AutoEnchantAll:OnChanged(function(s) Thread("AutoEnchantAll", SafeLoop("EnchantAll", function() AutoUpgradeLoop("Enchant") end), s) end)
+Toggles.AutoBlessing:OnChanged(function(s) Thread("AutoBlessing", SafeLoop("Blessing", function() AutoUpgradeLoop("Blessing") end), s) end)
+Toggles.AutoBlessingAll:OnChanged(function(s) Thread("AutoBlessingAll", SafeLoop("BlessingAll", function() AutoUpgradeLoop("Blessing") end), s) end)
 
--- UI Connection Handled by Fluent
+Toggles.ArtifactLock:OnChanged(function(state)
     Thread("Artifact.Lock", SafeLoop("ArtifactLogic", Func_ArtifactAutomation), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ArtifactDelete:OnChanged(function(state)
     Thread("Artifact.Delete", SafeLoop("ArtifactLogic", Func_ArtifactAutomation), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.ArtifactUpgrade:OnChanged(function(state)
     Thread("Artifact.Upgrade", SafeLoop("ArtifactLogic", Func_ArtifactAutomation), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoDungeon:OnChanged(function(state)
   Thread("AutoDungeon", Func_AutoDungeon, state)
 end)
 
--- UI Connection Handled by Fluent
-    Thread("AutoCrystalDefense", Func_AutoCrystalDefense, state)
-end)
-
--- UI Connection Handled by Fluent
+Toggles.AutoInfiniteTower:OnChanged(function(state)
   Thread("AutoInfiniteTower", Func_AutoInfiniteTower, state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoMerchant:OnChanged(function(state)
     Thread("AutoMerchant", SafeLoop("Merchant", Func_AutoMerchant), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoChest:OnChanged(function(state)
     Thread("AutoChest", SafeLoop("Chest", Func_AutoChest), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoCraftItem:OnChanged(function(state)
     Thread("AutoCraft", SafeLoop("Craft", Func_AutoCraft), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoQuestline:OnChanged(function(state)
     Thread("AutoQuestline", SafeLoop("Questline", AutoQuestlineLoop), state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AntiKnockback:OnChanged(function(state)
     Thread("AntiKnockback", Func_AntiKnockback, state)
 end)
 
@@ -6315,11 +6266,11 @@ for _, child in pairs(NotifFrame:GetChildren()) do
     ProcessNotification(child)
 end
 
--- UI Connection Handled by Fluent
+Toggles.TPW:OnChanged(function(v)
     TPW_S:SetVisible(TPW_T.Value)
     Thread("TPW", FuncTPW, v)
 end)
--- UI Connection Handled by Fluent
+Toggles.Noclip:OnChanged(function(v)
     Thread("Noclip", FuncNoclip, v)
 end)
 
@@ -6355,7 +6306,7 @@ Options.LimitFPSValue:OnChanged(function()
     end
 end)
 
--- UI Connection Handled by Fluent
+Toggles.LimitFPS:OnChanged(function(v)
     FPS_S:SetVisible(FPS_T.Value)
     if not v then
         setfpscap(999)
@@ -6375,23 +6326,23 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- UI Connection Handled by Fluent RunService:Set3dRenderingEnabled(not v) end)
+Toggles.Disable3DRender:OnChanged(function(v) RunService:Set3dRenderingEnabled(not v) end)
 
--- UI Connection Handled by Fluent
+Toggles.FPSBoost:OnChanged(function(state)
     ApplyFPSBoost(state)
 end)
 
--- UI Connection Handled by Fluent
+Toggles.FPSBoost_AF:OnChanged(function(state)
     if state then
         ApplyIslandWipe()
     end
 end)
 
--- UI Connection Handled by Fluent
+Toggles.AutoReconnect:OnChanged(function(state)
     if state then Func_AutoReconnect() end
 end)
 
--- UI Connection Handled by Fluent
+Toggles.NoGameplayPaused:OnChanged(function(state)
     Thread("NoGameplayPaused", SafeLoop("Anti-Pause", Func_NoGameplayPaused), state)
 end)
 
@@ -6789,12 +6740,3 @@ end)
 if not eh_success then
     Library:Notify("ERROR: " .. tostring(err), 4)
 end
-
-    end)
-    if not success then
-        warn("FourHub Logic Error: " .. tostring(err))
-    end
-end)
-
-Window:SelectTab(1)
-Fluent:Notify({ Title = "FourHub", Content = "Script Loaded Successfully!", Duration = 5 })
